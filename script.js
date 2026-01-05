@@ -184,31 +184,31 @@ function setupGunModel() {
         metalness: 0.5
     });
 
-    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.2, 16), gunMaterial);
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 1.35, 16), gunMaterial);
     barrel.rotation.z = Math.PI / 2;
-    barrel.position.set(0.25, -0.02, -0.45);
+    barrel.position.set(0.32, -0.02, -0.45);
     gunModel.add(barrel);
 
-    const barrelCap = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.1, 16), accentMaterial);
+    const barrelCap = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.1, 16), accentMaterial);
     barrelCap.rotation.z = Math.PI / 2;
-    barrelCap.position.set(0.85, -0.02, -0.45);
+    barrelCap.position.set(0.99, -0.02, -0.45);
     gunModel.add(barrelCap);
 
     const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.055, 0.12, 16), highlightMaterial);
     muzzle.rotation.z = Math.PI / 2;
-    muzzle.position.set(0.98, -0.02, -0.45);
+    muzzle.position.set(1.12, -0.02, -0.45);
     gunModel.add(muzzle);
 
-    const topRail = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.04, 0.12), accentMaterial);
-    topRail.position.set(0.15, 0.03, -0.45);
+    const topRail = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.03, 0.12), accentMaterial);
+    topRail.position.set(0.1, 0.03, -0.45);
     gunModel.add(topRail);
 
     const gasBlock = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.07, 0.1), accentMaterial);
-    gasBlock.position.set(0.55, 0.01, -0.45);
+    gasBlock.position.set(0.62, 0.01, -0.45);
     gunModel.add(gasBlock);
 
-    gunModel.position.set(0.32, -0.32, -0.95);
-    gunModel.rotation.set(0, -0.05, 0.01);
+    gunModel.position.set(0.55, -0.45, -1.05);
+    gunModel.rotation.set(-0.08, -0.25, 0.12);
     gunBasePosition.copy(gunModel.position);
 
     weaponRig.add(gunModel);
