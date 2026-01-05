@@ -225,7 +225,7 @@ function setupGunModel() {
     gunModel.add(magazine);
 
     const stock = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.5), gunMaterial);
-    stock.position.set(0.02, -0.05, -0.02);
+    stock.position.set(0.14, -0.05, -0.02);
     gunModel.add(stock);
 
     const topRail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.03, 0.5), accentMaterial);
