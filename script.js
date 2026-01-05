@@ -38,6 +38,8 @@ let zombieModel = null;
 let flashlight = null;
 let flashlightTarget = null;
 let gunModel = null;
+let weaponRig = null;
+const gunBasePosition = new THREE.Vector3();
 
 const ZOMBIE_MODEL_URL = 'assets/zombie.glb';
 const ZOMBIE_SCALE = 1.2;
@@ -159,6 +161,9 @@ function setupFlashlight() {
 }
 
 function setupGunModel() {
+    weaponRig = new THREE.Group();
+    camera.add(weaponRig);
+
     gunModel = new THREE.Group();
 
     const gunMaterial = new THREE.MeshStandardMaterial({
@@ -227,9 +232,46 @@ function setupGunModel() {
     sideAccent.position.set(0.05, -0.05, -0.25);
     gunModel.add(sideAccent);
 
-    gunModel.position.set(0.45, -0.3, -0.35);
-    gunModel.rotation.set(0.05, -0.25, 0.04);
-    camera.add(gunModel);
+    const armMaterial = new THREE.MeshStandardMaterial({
+        color: 0xc7a27d,
+        roughness: 0.7,
+        metalness: 0.1
+    });
+
+    const sleeveMaterial = new THREE.MeshStandardMaterial({
+        color: 0x2f343c,
+        roughness: 0.9,
+        metalness: 0.05
+    });
+
+    const armsGroup = new THREE.Group();
+
+    const rightSleeve = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.32, 0.12), sleeveMaterial);
+    rightSleeve.position.set(0.22, -0.3, -0.28);
+    rightSleeve.rotation.z = 0.65;
+    armsGroup.add(rightSleeve);
+
+    const rightHand = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.12), armMaterial);
+    rightHand.position.set(0.32, -0.42, -0.2);
+    rightHand.rotation.z = 0.6;
+    armsGroup.add(rightHand);
+
+    const leftSleeve = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.32, 0.12), sleeveMaterial);
+    leftSleeve.position.set(-0.05, -0.32, -0.4);
+    leftSleeve.rotation.z = 0.2;
+    armsGroup.add(leftSleeve);
+
+    const leftHand = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.12), armMaterial);
+    leftHand.position.set(0.02, -0.46, -0.33);
+    leftHand.rotation.z = 0.2;
+    armsGroup.add(leftHand);
+
+    gunModel.position.set(0.6, -0.48, -0.65);
+    gunModel.rotation.set(0.06, -0.35, 0.12);
+    gunBasePosition.copy(gunModel.position);
+
+    weaponRig.add(armsGroup);
+    weaponRig.add(gunModel);
 }
 
 function createEnvironment() {
@@ -643,9 +685,9 @@ function shoot() {
 
     // Gun recoil animation
     if (gunModel) {
-        gunModel.position.z = -0.26;
+        gunModel.position.z = gunBasePosition.z + 0.08;
         setTimeout(() => {
-            gunModel.position.z = -0.2;
+            gunModel.position.z = gunBasePosition.z;
         }, 100);
     }
 
