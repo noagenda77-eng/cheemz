@@ -37,6 +37,7 @@ let buildings = [];
 let zombieModel = null;
 let flashlight = null;
 let flashlightTarget = null;
+let gunModel = null;
 
 const ZOMBIE_MODEL_URL = 'assets/zombie.glb';
 const ZOMBIE_SCALE = 1.2;
@@ -60,6 +61,7 @@ function init() {
     // Lighting
     setupLighting();
     setupFlashlight();
+    setupGunModel();
 
     // Create environment
     createEnvironment();
@@ -154,6 +156,47 @@ function setupFlashlight() {
     camera.add(flashlight);
     camera.add(flashlightTarget);
     flashlight.target = flashlightTarget;
+}
+
+function setupGunModel() {
+    gunModel = new THREE.Group();
+
+    const gunMaterial = new THREE.MeshStandardMaterial({
+        color: 0x2b2f36,
+        roughness: 0.4,
+        metalness: 0.6
+    });
+
+    const accentMaterial = new THREE.MeshStandardMaterial({
+        color: 0x0f1115,
+        roughness: 0.6,
+        metalness: 0.2
+    });
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.16), gunMaterial);
+    body.position.set(0, -0.08, -0.35);
+    gunModel.add(body);
+
+    const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.06, 0.08), gunMaterial);
+    barrel.position.set(0.35, -0.06, -0.35);
+    gunModel.add(barrel);
+
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.18, 0.12), accentMaterial);
+    grip.position.set(-0.1, -0.22, -0.3);
+    grip.rotation.z = 0.35;
+    gunModel.add(grip);
+
+    const magazine = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.16, 0.1), accentMaterial);
+    magazine.position.set(0.1, -0.2, -0.3);
+    magazine.rotation.z = -0.2;
+    gunModel.add(magazine);
+
+    const sight = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.04, 0.08), accentMaterial);
+    sight.position.set(0.05, -0.02, -0.35);
+    gunModel.add(sight);
+
+    gunModel.rotation.set(0.05, -0.2, 0);
+    camera.add(gunModel);
 }
 
 function createEnvironment() {
@@ -566,9 +609,12 @@ function shoot() {
     setTimeout(() => muzzleFlash.style.opacity = '0', 50);
 
     // Gun recoil animation
-    const gunModel = document.getElementById('gun-model');
-    gunModel.style.transform = 'translateY(-10px)';
-    setTimeout(() => gunModel.style.transform = '', 100);
+    if (gunModel) {
+        gunModel.position.z = -0.38;
+        setTimeout(() => {
+            gunModel.position.z = -0.35;
+        }, 100);
+    }
 
     // Raycasting for hit detection
     const raycaster = new THREE.Raycaster();
