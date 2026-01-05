@@ -34,6 +34,9 @@ let scene, camera, renderer;
 let zombies = [];
 let bullets = [];
 let buildings = [];
+let zombieModel = null;
+
+const ZOMBIE_MODEL_URL = 'assets/zombie.glb';
 
 // Initialize Three.js
 function init() {
@@ -56,6 +59,9 @@ function init() {
     // Create environment
     createEnvironment();
 
+    // Load zombie model
+    loadZombieModel();
+
     // Hide loading screen
     document.getElementById('loading').style.display = 'none';
 
@@ -64,6 +70,20 @@ function init() {
 
     // Start render loop
     animate();
+}
+
+function loadZombieModel() {
+    const loader = new THREE.GLTFLoader();
+    loader.load(
+        ZOMBIE_MODEL_URL,
+        (gltf) => {
+            zombieModel = gltf.scene;
+        },
+        undefined,
+        (error) => {
+            console.error('Failed to load zombie model:', error);
+        }
+    );
 }
 
 function setupLighting() {
@@ -371,64 +391,76 @@ function createLightBeam() {
 function spawnZombie() {
     if (gameState.zombiesSpawned >= gameState.zombiesInWave) return;
 
-    const zombie = new THREE.Group();
+    let zombie;
+    if (zombieModel) {
+        zombie = THREE.SkeletonUtils.clone(zombieModel);
+        zombie.traverse((child) => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+        zombie.scale.set(1.2, 1.2, 1.2);
+    } else {
+        zombie = new THREE.Group();
 
-    // Body (placeholder - cylinder)
-    const bodyMaterial = new THREE.MeshStandardMaterial({
-        color: 0x3a5a3a,
-        roughness: 0.8
-    });
+        // Body (placeholder - cylinder)
+        const bodyMaterial = new THREE.MeshStandardMaterial({
+            color: 0x3a5a3a,
+            roughness: 0.8
+        });
 
-    const body = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.4, 0.5, 1.5),
-        bodyMaterial
-    );
-    body.position.y = 1.25;
-    zombie.add(body);
+        const body = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.4, 0.5, 1.5),
+            bodyMaterial
+        );
+        body.position.y = 1.25;
+        zombie.add(body);
 
-    // Head (placeholder - sphere)
-    const head = new THREE.Mesh(
-        new THREE.SphereGeometry(0.35),
-        new THREE.MeshStandardMaterial({ color: 0x4a6a4a })
-    );
-    head.position.y = 2.2;
-    zombie.add(head);
+        // Head (placeholder - sphere)
+        const head = new THREE.Mesh(
+            new THREE.SphereGeometry(0.35),
+            new THREE.MeshStandardMaterial({ color: 0x4a6a4a })
+        );
+        head.position.y = 2.2;
+        zombie.add(head);
 
-    // Glowing eyes
-    const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-    const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.05), eyeMaterial);
-    leftEye.position.set(-0.12, 2.25, 0.3);
-    zombie.add(leftEye);
+        // Glowing eyes
+        const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.05), eyeMaterial);
+        leftEye.position.set(-0.12, 2.25, 0.3);
+        zombie.add(leftEye);
 
-    const rightEye = new THREE.Mesh(new THREE.SphereGeometry(0.05), eyeMaterial);
-    rightEye.position.set(0.12, 2.25, 0.3);
-    zombie.add(rightEye);
+        const rightEye = new THREE.Mesh(new THREE.SphereGeometry(0.05), eyeMaterial);
+        rightEye.position.set(0.12, 2.25, 0.3);
+        zombie.add(rightEye);
 
-    // Arms (placeholder - cylinders)
-    const armGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.8);
+        // Arms (placeholder - cylinders)
+        const armGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.8);
 
-    const leftArm = new THREE.Mesh(armGeometry, bodyMaterial);
-    leftArm.position.set(-0.6, 1.5, 0.2);
-    leftArm.rotation.x = Math.PI / 3;
-    leftArm.rotation.z = Math.PI / 6;
-    zombie.add(leftArm);
+        const leftArm = new THREE.Mesh(armGeometry, bodyMaterial);
+        leftArm.position.set(-0.6, 1.5, 0.2);
+        leftArm.rotation.x = Math.PI / 3;
+        leftArm.rotation.z = Math.PI / 6;
+        zombie.add(leftArm);
 
-    const rightArm = new THREE.Mesh(armGeometry, bodyMaterial);
-    rightArm.position.set(0.6, 1.5, 0.2);
-    rightArm.rotation.x = Math.PI / 3;
-    rightArm.rotation.z = -Math.PI / 6;
-    zombie.add(rightArm);
+        const rightArm = new THREE.Mesh(armGeometry, bodyMaterial);
+        rightArm.position.set(0.6, 1.5, 0.2);
+        rightArm.rotation.x = Math.PI / 3;
+        rightArm.rotation.z = -Math.PI / 6;
+        zombie.add(rightArm);
 
-    // Legs (placeholder)
-    const legGeometry = new THREE.CylinderGeometry(0.12, 0.1, 1);
+        // Legs (placeholder)
+        const legGeometry = new THREE.CylinderGeometry(0.12, 0.1, 1);
 
-    const leftLeg = new THREE.Mesh(legGeometry, bodyMaterial);
-    leftLeg.position.set(-0.2, 0.5, 0);
-    zombie.add(leftLeg);
+        const leftLeg = new THREE.Mesh(legGeometry, bodyMaterial);
+        leftLeg.position.set(-0.2, 0.5, 0);
+        zombie.add(leftLeg);
 
-    const rightLeg = new THREE.Mesh(legGeometry, bodyMaterial);
-    rightLeg.position.set(0.2, 0.5, 0);
-    zombie.add(rightLeg);
+        const rightLeg = new THREE.Mesh(legGeometry, bodyMaterial);
+        rightLeg.position.set(0.2, 0.5, 0);
+        zombie.add(rightLeg);
+    }
 
     // Spawn position (random around player)
     const angle = Math.random() * Math.PI * 2;
