@@ -224,8 +224,8 @@ function setupGunModel() {
     magazine.rotation.x = 0.12;
     gunModel.add(magazine);
 
-    const stock = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.28), gunMaterial);
-    stock.position.set(-0.1, -0.05, -0.18);
+    const stock = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.5), gunMaterial);
+    stock.position.set(-0.1, -0.05, -0.02);
     gunModel.add(stock);
 
     const topRail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.03, 0.5), accentMaterial);
@@ -236,7 +236,7 @@ function setupGunModel() {
     rearSight.position.set(0.06, 0.08, -0.35);
     gunModel.add(rearSight);
 
-    gunModel.position.set(0.32, -0.34, -0.7);
+    gunModel.position.set(0.32, -0.34, -0.55);
     gunModel.rotation.set(-0.02, 0.03, 0.03);
     gunBasePosition.copy(gunModel.position);
 
