@@ -195,7 +195,8 @@ function setupGunModel() {
     sight.position.set(0.05, -0.02, -0.35);
     gunModel.add(sight);
 
-    gunModel.rotation.set(0.05, -0.2, 0);
+    gunModel.position.set(0.35, -0.25, -0.2);
+    gunModel.rotation.set(0.08, -0.35, 0.05);
     camera.add(gunModel);
 }
 
@@ -610,9 +611,9 @@ function shoot() {
 
     // Gun recoil animation
     if (gunModel) {
-        gunModel.position.z = -0.38;
+        gunModel.position.z = -0.26;
         setTimeout(() => {
-            gunModel.position.z = -0.35;
+            gunModel.position.z = -0.2;
         }, 100);
     }
 
