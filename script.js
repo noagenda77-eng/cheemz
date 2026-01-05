@@ -184,93 +184,33 @@ function setupGunModel() {
         metalness: 0.5
     });
 
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.14, 0.18), gunMaterial);
-    body.position.set(0.05, -0.08, -0.35);
-    gunModel.add(body);
-
-    const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.05, 0.07), gunMaterial);
-    barrel.position.set(0.78, -0.04, -0.35);
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.2, 16), gunMaterial);
+    barrel.rotation.z = Math.PI / 2;
+    barrel.position.set(0.25, -0.02, -0.45);
     gunModel.add(barrel);
 
-    const muzzle = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.05, 0.08), accentMaterial);
-    muzzle.position.set(1.25, -0.04, -0.35);
+    const barrelCap = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.1, 16), accentMaterial);
+    barrelCap.rotation.z = Math.PI / 2;
+    barrelCap.position.set(0.85, -0.02, -0.45);
+    gunModel.add(barrelCap);
+
+    const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.055, 0.12, 16), highlightMaterial);
+    muzzle.rotation.z = Math.PI / 2;
+    muzzle.position.set(0.98, -0.02, -0.45);
     gunModel.add(muzzle);
 
-    const topRail = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.03, 0.1), accentMaterial);
-    topRail.position.set(0.45, 0.02, -0.35);
+    const topRail = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.04, 0.12), accentMaterial);
+    topRail.position.set(0.15, 0.03, -0.45);
     gunModel.add(topRail);
 
-    const sightBase = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.06), accentMaterial);
-    sightBase.position.set(0.35, 0.07, -0.35);
-    gunModel.add(sightBase);
+    const gasBlock = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.07, 0.1), accentMaterial);
+    gasBlock.position.set(0.55, 0.01, -0.45);
+    gunModel.add(gasBlock);
 
-    const sightRing = new THREE.Mesh(new THREE.TorusGeometry(0.035, 0.008, 12, 24), highlightMaterial);
-    sightRing.position.set(0.38, 0.11, -0.35);
-    sightRing.rotation.y = Math.PI / 2;
-    gunModel.add(sightRing);
-
-    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.22, 0.14), accentMaterial);
-    grip.position.set(-0.15, -0.24, -0.3);
-    grip.rotation.z = 0.45;
-    gunModel.add(grip);
-
-    const magazine = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.2, 0.12), accentMaterial);
-    magazine.position.set(0.12, -0.23, -0.3);
-    magazine.rotation.z = -0.25;
-    gunModel.add(magazine);
-
-    const foregrip = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.18, 0.1), accentMaterial);
-    foregrip.position.set(0.45, -0.22, -0.35);
-    foregrip.rotation.z = 0.1;
-    gunModel.add(foregrip);
-
-    const stock = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.12, 0.16), gunMaterial);
-    stock.position.set(-0.32, -0.05, -0.34);
-    gunModel.add(stock);
-
-    const sideAccent = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.05, 0.02), highlightMaterial);
-    sideAccent.position.set(0.05, -0.05, -0.25);
-    gunModel.add(sideAccent);
-
-    const armMaterial = new THREE.MeshStandardMaterial({
-        color: 0xc7a27d,
-        roughness: 0.7,
-        metalness: 0.1
-    });
-
-    const sleeveMaterial = new THREE.MeshStandardMaterial({
-        color: 0x2f343c,
-        roughness: 0.9,
-        metalness: 0.05
-    });
-
-    const armsGroup = new THREE.Group();
-
-    const rightSleeve = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.32, 0.12), sleeveMaterial);
-    rightSleeve.position.set(0.22, -0.3, -0.28);
-    rightSleeve.rotation.z = 0.65;
-    armsGroup.add(rightSleeve);
-
-    const rightHand = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.12), armMaterial);
-    rightHand.position.set(0.32, -0.42, -0.2);
-    rightHand.rotation.z = 0.6;
-    armsGroup.add(rightHand);
-
-    const leftSleeve = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.32, 0.12), sleeveMaterial);
-    leftSleeve.position.set(-0.05, -0.32, -0.4);
-    leftSleeve.rotation.z = 0.2;
-    armsGroup.add(leftSleeve);
-
-    const leftHand = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.12), armMaterial);
-    leftHand.position.set(0.02, -0.46, -0.33);
-    leftHand.rotation.z = 0.2;
-    armsGroup.add(leftHand);
-
-    gunModel.position.set(0.32, -0.38, -0.72);
-    gunModel.rotation.set(0.02, -0.15, 0.03);
+    gunModel.position.set(0.32, -0.32, -0.95);
+    gunModel.rotation.set(0, -0.05, 0.01);
     gunBasePosition.copy(gunModel.position);
 
-    weaponRig.add(armsGroup);
     weaponRig.add(gunModel);
 }
 
