@@ -658,7 +658,7 @@ function spawnZombie() {
     
     zombie.userData = {
         isZombieRoot: true,
-        health: 50 + gameState.wave * 10,
+        health: 1,
         speed: 0.03 + gameState.wave * 0.005,
         damage: 10 + gameState.wave * 2,
         attackCooldown: 0,
@@ -850,6 +850,7 @@ function killZombie(zombie) {
     if (index > -1) {
         zombies.splice(index, 1);
         scene.remove(zombie);
+        createGibEffect(zombie.position);
 
         gameState.kills++;
         gameState.score += 100;
@@ -863,6 +864,41 @@ function killZombie(zombie) {
             nextWave();
         }
     }
+}
+
+function createGibEffect(position) {
+    const chunks = [];
+    for (let i = 0; i < 12; i++) {
+        const chunk = new THREE.Mesh(
+            new THREE.BoxGeometry(0.08, 0.08, 0.08),
+            new THREE.MeshStandardMaterial({ color: 0x7a1a1a, roughness: 0.8 })
+        );
+        chunk.position.copy(position);
+        chunk.position.y += 0.6 + Math.random() * 0.6;
+        chunk.userData.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 0.35,
+            Math.random() * 0.35 + 0.15,
+            (Math.random() - 0.5) * 0.35
+        );
+        scene.add(chunk);
+        chunks.push(chunk);
+    }
+
+    let frames = 0;
+    const animateGibs = () => {
+        frames++;
+        chunks.forEach((chunk) => {
+            chunk.position.add(chunk.userData.velocity);
+            chunk.userData.velocity.y -= 0.02;
+        });
+
+        if (frames < 40) {
+            requestAnimationFrame(animateGibs);
+        } else {
+            chunks.forEach((chunk) => scene.remove(chunk));
+        }
+    };
+    animateGibs();
 }
 
 function addKillNotification() {
