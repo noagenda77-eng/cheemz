@@ -35,6 +35,8 @@ let zombies = [];
 let bullets = [];
 let buildings = [];
 let zombieModel = null;
+let flashlight = null;
+let flashlightTarget = null;
 
 const ZOMBIE_MODEL_URL = 'assets/zombie.glb';
 const ZOMBIE_SCALE = 1.2;
@@ -47,6 +49,7 @@ function init() {
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.copy(player.position);
+    scene.add(camera);
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -56,6 +59,7 @@ function init() {
 
     // Lighting
     setupLighting();
+    setupFlashlight();
 
     // Create environment
     createEnvironment();
@@ -140,6 +144,16 @@ function setupLighting() {
     setInterval(() => {
         fireLight.intensity = 1.5 + Math.random() * 1;
     }, 100);
+}
+
+function setupFlashlight() {
+    flashlight = new THREE.SpotLight(0xffffff, 1.2, 30, Math.PI / 8, 0.4, 1);
+    flashlight.position.set(0.2, -0.15, -0.35);
+    flashlightTarget = new THREE.Object3D();
+    flashlightTarget.position.set(0, -0.1, -5);
+    camera.add(flashlight);
+    camera.add(flashlightTarget);
+    flashlight.target = flashlightTarget;
 }
 
 function createEnvironment() {
@@ -591,19 +605,23 @@ function shoot() {
 }
 
 function createBulletTracer(raycaster) {
+    const tracerLength = 30;
     const tracerGeometry = new THREE.BufferGeometry().setFromPoints([
         camera.position.clone(),
-        raycaster.ray.origin.clone().add(raycaster.ray.direction.clone().multiplyScalar(100))
+        raycaster.ray.origin.clone().add(raycaster.ray.direction.clone().multiplyScalar(tracerLength))
     ]);
     const tracerMaterial = new THREE.LineBasicMaterial({
-        color: 0xffff00,
+        color: 0xffcc66,
         transparent: true,
-        opacity: 0.5
+        opacity: 0.8
     });
     const tracer = new THREE.Line(tracerGeometry, tracerMaterial);
     scene.add(tracer);
 
-    setTimeout(() => scene.remove(tracer), 50);
+    setTimeout(() => {
+        tracerMaterial.opacity = 0.15;
+    }, 40);
+    setTimeout(() => scene.remove(tracer), 90);
 }
 
 function createBloodEffect(position) {
