@@ -188,16 +188,16 @@ function setupGunModel() {
     body.position.set(0.05, -0.08, -0.35);
     gunModel.add(body);
 
-    const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.06, 0.09), gunMaterial);
-    barrel.position.set(0.55, -0.05, -0.35);
+    const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.05, 0.07), gunMaterial);
+    barrel.position.set(0.78, -0.04, -0.35);
     gunModel.add(barrel);
 
-    const muzzle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.05, 0.07), accentMaterial);
-    muzzle.position.set(0.85, -0.05, -0.35);
+    const muzzle = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.05, 0.08), accentMaterial);
+    muzzle.position.set(1.25, -0.04, -0.35);
     gunModel.add(muzzle);
 
-    const topRail = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.03, 0.1), accentMaterial);
-    topRail.position.set(0.2, 0.02, -0.35);
+    const topRail = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.03, 0.1), accentMaterial);
+    topRail.position.set(0.45, 0.02, -0.35);
     gunModel.add(topRail);
 
     const sightBase = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.06), accentMaterial);
@@ -266,8 +266,8 @@ function setupGunModel() {
     leftHand.rotation.z = 0.2;
     armsGroup.add(leftHand);
 
-    gunModel.position.set(0.6, -0.48, -0.65);
-    gunModel.rotation.set(0.06, -0.35, 0.12);
+    gunModel.position.set(0.32, -0.38, -0.72);
+    gunModel.rotation.set(0.02, -0.15, 0.03);
     gunBasePosition.copy(gunModel.position);
 
     weaponRig.add(armsGroup);
