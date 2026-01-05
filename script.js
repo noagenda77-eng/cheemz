@@ -870,15 +870,15 @@ function createGibEffect(position) {
     const chunks = [];
     for (let i = 0; i < 36; i++) {
         const chunk = new THREE.Mesh(
-            new THREE.BoxGeometry(0.42, 0.42, 0.42),
+            new THREE.BoxGeometry(0.21, 0.21, 0.21),
             new THREE.MeshStandardMaterial({ color: 0x7a1a1a, roughness: 0.8 })
         );
         chunk.position.copy(position);
         chunk.position.y += 0.6 + Math.random() * 0.6;
         chunk.userData.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 0.35,
-            Math.random() * 0.35 + 0.15,
-            (Math.random() - 0.5) * 0.35
+            (Math.random() - 0.5) * 0.175,
+            Math.random() * 0.175 + 0.075,
+            (Math.random() - 0.5) * 0.175
         );
         chunk.userData.bounces = 2;
         scene.add(chunk);
