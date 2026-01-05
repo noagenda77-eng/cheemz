@@ -546,15 +546,6 @@ function spawnZombie() {
         zombie.add(zombieInstance);
         zombieInstance.scale.set(ZOMBIE_SCALE, ZOMBIE_SCALE, ZOMBIE_SCALE);
         centerModelOnFloor(zombieInstance);
-        if (zombieClips.length > 0) {
-            const mixer = new THREE.AnimationMixer(zombieInstance);
-            zombieClips.forEach((clip) => {
-                const action = mixer.clipAction(clip);
-                action.setLoop(THREE.LoopRepeat);
-                action.play();
-            });
-            zombie.userData.mixer = mixer;
-        }
         zombieInstance.traverse((child) => {
             if (child.isMesh) {
                 child.castShadow = true;
@@ -631,13 +622,24 @@ function spawnZombie() {
         player.position.z + Math.sin(angle) * distance
     );
 
+    const hitMeshes = collectZombieMeshes(zombie);
     zombie.userData = {
         health: 50 + gameState.wave * 10,
         speed: 0.03 + gameState.wave * 0.005,
         damage: 10 + gameState.wave * 2,
         attackCooldown: 0,
-        hitMeshes: collectZombieMeshes(zombie)
+        hitMeshes
     };
+    if (zombieModel && zombieClips.length > 0) {
+        const zombieInstance = zombie.children[0];
+        const mixer = new THREE.AnimationMixer(zombieInstance);
+        zombieClips.forEach((clip) => {
+            const action = mixer.clipAction(clip);
+            action.setLoop(THREE.LoopRepeat);
+            action.play();
+        });
+        zombie.userData.mixer = mixer;
+    }
 
     scene.add(zombie);
     zombies.push(zombie);
