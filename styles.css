@@ -312,8 +312,8 @@ body {
 /* Muzzle flash */
 #muzzle-flash {
     position: fixed;
-    bottom: 15%;
-    right: 25%;
+    top: 50%;
+    left: 50%;
     width: 100px;
     height: 100px;
     background: radial-gradient(circle, rgba(255, 200, 50, 1) 0%, rgba(255, 100, 0, 0.5) 50%, transparent 70%);
@@ -321,6 +321,7 @@ body {
     pointer-events: none;
     z-index: 80;
     opacity: 0;
+    transform: translate(-50%, -50%);
 }
 
 

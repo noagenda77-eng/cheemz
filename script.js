@@ -39,6 +39,8 @@ let flashlight = null;
 let flashlightTarget = null;
 let gunModel = null;
 let weaponRig = null;
+let muzzleMesh = null;
+let gunshotAudio = null;
 const gunBasePosition = new THREE.Vector3();
 
 const ZOMBIE_MODEL_URL = 'assets/zombie.glb';
@@ -64,6 +66,7 @@ function init() {
     setupLighting();
     setupFlashlight();
     setupGunModel();
+    setupAudio();
 
     // Create environment
     createEnvironment();
@@ -205,6 +208,7 @@ function setupGunModel() {
     muzzle.rotation.x = Math.PI / 2;
     muzzle.position.set(0.12, -0.06, -1.65);
     gunModel.add(muzzle);
+    muzzleMesh = muzzle;
 
     const upperReceiver = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.35), gunMaterial);
     upperReceiver.position.set(0.06, -0.02, -0.4);
@@ -241,6 +245,35 @@ function setupGunModel() {
     gunBasePosition.copy(gunModel.position);
 
     weaponRig.add(gunModel);
+}
+
+function setupAudio() {
+    gunshotAudio = new Audio('assets/gunshot.mp3');
+    gunshotAudio.volume = 0.5;
+}
+
+function playGunshot() {
+    if (!gunshotAudio) return;
+    gunshotAudio.currentTime = 0;
+    gunshotAudio.play().catch(() => {});
+}
+
+function updateMuzzleFlashPosition() {
+    const muzzleFlash = document.getElementById('muzzle-flash');
+    if (!muzzleMesh || !muzzleFlash) return;
+
+    const position = new THREE.Vector3();
+    muzzleMesh.getWorldPosition(position);
+    position.project(camera);
+
+    const x = (position.x * 0.5 + 0.5) * window.innerWidth;
+    const y = (-position.y * 0.5 + 0.5) * window.innerHeight;
+
+    const clampedX = Math.min(Math.max(x, 0), window.innerWidth);
+    const clampedY = Math.min(Math.max(y, 0), window.innerHeight);
+
+    muzzleFlash.style.left = `${clampedX}px`;
+    muzzleFlash.style.top = `${clampedY}px`;
 }
 
 function createEnvironment() {
@@ -649,8 +682,11 @@ function shoot() {
 
     // Muzzle flash
     const muzzleFlash = document.getElementById('muzzle-flash');
+    updateMuzzleFlashPosition();
     muzzleFlash.style.opacity = '1';
     setTimeout(() => muzzleFlash.style.opacity = '0', 50);
+
+    playGunshot();
 
     // Gun recoil animation
     if (gunModel) {
