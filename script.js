@@ -868,9 +868,9 @@ function killZombie(zombie) {
 
 function createGibEffect(position) {
     const chunks = [];
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 36; i++) {
         const chunk = new THREE.Mesh(
-            new THREE.BoxGeometry(0.28, 0.28, 0.28),
+            new THREE.BoxGeometry(0.84, 0.84, 0.84),
             new THREE.MeshStandardMaterial({ color: 0x7a1a1a, roughness: 0.8 })
         );
         chunk.position.copy(position);
