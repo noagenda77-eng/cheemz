@@ -184,31 +184,60 @@ function setupGunModel() {
         metalness: 0.5
     });
 
-    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 1.35, 16), gunMaterial);
+    const handguard = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.6), gunMaterial);
+    handguard.position.set(0.12, -0.06, -0.75);
+    gunModel.add(handguard);
+
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.0, 16), gunMaterial);
     barrel.rotation.x = Math.PI / 2;
-    barrel.position.set(0.08, -0.04, -0.9);
+    barrel.position.set(0.12, -0.06, -1.25);
     gunModel.add(barrel);
 
-    const barrelCap = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.1, 16), accentMaterial);
-    barrelCap.rotation.x = Math.PI / 2;
-    barrelCap.position.set(0.08, -0.04, -1.52);
-    gunModel.add(barrelCap);
-
-    const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.055, 0.12, 16), highlightMaterial);
-    muzzle.rotation.x = Math.PI / 2;
-    muzzle.position.set(0.08, -0.04, -1.62);
-    gunModel.add(muzzle);
-
-    const topRail = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.03, 0.12), accentMaterial);
-    topRail.position.set(0.06, 0.02, -0.7);
-    gunModel.add(topRail);
-
-    const gasBlock = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.07, 0.1), accentMaterial);
-    gasBlock.position.set(0.08, -0.01, -1.15);
+    const gasBlock = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.08), accentMaterial);
+    gasBlock.position.set(0.12, -0.05, -1.0);
     gunModel.add(gasBlock);
 
-    gunModel.position.set(0.35, -0.38, -0.8);
-    gunModel.rotation.set(-0.05, 0, 0.02);
+    const frontSight = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.12, 0.04), accentMaterial);
+    frontSight.position.set(0.12, 0.02, -1.05);
+    gunModel.add(frontSight);
+
+    const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.12, 16), highlightMaterial);
+    muzzle.rotation.x = Math.PI / 2;
+    muzzle.position.set(0.12, -0.06, -1.65);
+    gunModel.add(muzzle);
+
+    const upperReceiver = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.35), gunMaterial);
+    upperReceiver.position.set(0.06, -0.02, -0.4);
+    gunModel.add(upperReceiver);
+
+    const lowerReceiver = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.1, 0.26), accentMaterial);
+    lowerReceiver.position.set(0.05, -0.12, -0.35);
+    gunModel.add(lowerReceiver);
+
+    const pistolGrip = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.18, 0.1), accentMaterial);
+    pistolGrip.position.set(-0.02, -0.24, -0.25);
+    pistolGrip.rotation.x = 0.3;
+    gunModel.add(pistolGrip);
+
+    const magazine = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.24, 0.12), accentMaterial);
+    magazine.position.set(0.08, -0.28, -0.32);
+    magazine.rotation.x = 0.12;
+    gunModel.add(magazine);
+
+    const stock = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.28), gunMaterial);
+    stock.position.set(-0.1, -0.05, -0.18);
+    gunModel.add(stock);
+
+    const topRail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.03, 0.5), accentMaterial);
+    topRail.position.set(0.06, 0.05, -0.55);
+    gunModel.add(topRail);
+
+    const rearSight = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.08, 0.05), accentMaterial);
+    rearSight.position.set(0.06, 0.08, -0.35);
+    gunModel.add(rearSight);
+
+    gunModel.position.set(0.32, -0.34, -0.7);
+    gunModel.rotation.set(-0.02, 0.03, 0.03);
     gunBasePosition.copy(gunModel.position);
 
     weaponRig.add(gunModel);
