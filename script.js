@@ -35,6 +35,7 @@ let zombies = [];
 let bullets = [];
 let buildings = [];
 let zombieModel = null;
+let zombieClips = [];
 let flashlight = null;
 let flashlightTarget = null;
 let gunModel = null;
@@ -42,6 +43,7 @@ let weaponRig = null;
 let muzzleMesh = null;
 let gunshotAudio = null;
 const gunBasePosition = new THREE.Vector3();
+const animationClock = new THREE.Clock();
 
 const ZOMBIE_MODEL_URL = 'assets/zombie.glb';
 const ZOMBIE_SCALE = 1.2;
@@ -90,6 +92,7 @@ function loadZombieModel() {
         ZOMBIE_MODEL_URL,
         (gltf) => {
             zombieModel = gltf.scene;
+            zombieClips = gltf.animations || [];
         },
         undefined,
         (error) => {
@@ -543,6 +546,15 @@ function spawnZombie() {
         zombie.add(zombieInstance);
         zombieInstance.scale.set(ZOMBIE_SCALE, ZOMBIE_SCALE, ZOMBIE_SCALE);
         centerModelOnFloor(zombieInstance);
+        if (zombieClips.length > 0) {
+            const mixer = new THREE.AnimationMixer(zombieInstance);
+            zombieClips.forEach((clip) => {
+                const action = mixer.clipAction(clip);
+                action.setLoop(THREE.LoopRepeat);
+                action.play();
+            });
+            zombie.userData.mixer = mixer;
+        }
         zombieInstance.traverse((child) => {
             if (child.isMesh) {
                 child.castShadow = true;
@@ -1026,10 +1038,16 @@ let spawnTimer = 0;
 
 function animate() {
     requestAnimationFrame(animate);
+    const delta = animationClock.getDelta();
 
     if (gameState.isPlaying) {
         updatePlayer();
         updateZombies();
+        zombies.forEach((zombie) => {
+            if (zombie.userData?.mixer) {
+                zombie.userData.mixer.update(delta);
+            }
+        });
 
         // Spawn zombies periodically
         spawnTimer++;
