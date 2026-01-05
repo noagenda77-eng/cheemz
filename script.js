@@ -624,6 +624,7 @@ function spawnZombie() {
 
     const hitMeshes = collectZombieMeshes(zombie);
     zombie.userData = {
+        isZombieRoot: true,
         health: 50 + gameState.wave * 10,
         speed: 0.03 + gameState.wave * 0.005,
         damage: 10 + gameState.wave * 2,
@@ -649,12 +650,23 @@ function spawnZombie() {
 function collectZombieMeshes(zombie) {
     const meshes = [];
     zombie.traverse((child) => {
-        if (child.isMesh) {
+        if (child.isMesh || child.isSkinnedMesh) {
             child.userData.zombieRoot = zombie;
             meshes.push(child);
         }
     });
     return meshes;
+}
+
+function findZombieRoot(object) {
+    let current = object;
+    while (current) {
+        if (current.userData?.isZombieRoot) {
+            return current;
+        }
+        current = current.parent;
+    }
+    return null;
 }
 
 function updateZombies() {
@@ -716,13 +728,13 @@ function shoot() {
 
     // Check zombie hits
     const zombieMeshes = zombies.flatMap((z) => z.userData?.hitMeshes ?? []);
-    const intersects = raycaster.intersectObjects(zombieMeshes);
+    const intersects = raycaster.intersectObjects(zombieMeshes, true);
 
     if (intersects.length > 0) {
         const hitObject = intersects[0].object;
-        const zombie = hitObject.userData.zombieRoot;
+        const zombie = hitObject.userData.zombieRoot ?? findZombieRoot(hitObject);
 
-        if (zombie.userData) {
+        if (zombie?.userData) {
             zombie.userData.health -= 25;
             showHitMarker();
 
