@@ -613,31 +613,6 @@ function spawnZombie() {
         zombie.add(rightLeg);
     }
 
-    // Create invisible hitbox for reliable raycasting
-    // This solves the issue where skinned meshes don't raycast properly
-    const hitboxMaterial = new THREE.MeshBasicMaterial({
-        visible: false  // Invisible but still raycastable
-    });
-    
-    // Main body hitbox (capsule-like shape using cylinder + spheres)
-    const bodyHitbox = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.5, 0.5, 1.8, 8),
-        hitboxMaterial
-    );
-    bodyHitbox.position.y = 1.2;
-    bodyHitbox.userData.isHitbox = true;
-    zombie.add(bodyHitbox);
-    
-    // Head hitbox
-    const headHitbox = new THREE.Mesh(
-        new THREE.SphereGeometry(0.4, 8, 8),
-        hitboxMaterial
-    );
-    headHitbox.position.y = 2.3;
-    headHitbox.userData.isHitbox = true;
-    headHitbox.userData.isHeadshot = true;  // For potential headshot bonus
-    zombie.add(headHitbox);
-
     // Spawn position (random around player)
     const angle = Math.random() * Math.PI * 2;
     const distance = 25 + Math.random() * 15;
@@ -647,18 +622,10 @@ function spawnZombie() {
         player.position.z + Math.sin(angle) * distance
     );
 
-    // Collect hitbox meshes for raycasting
-    const hitMeshes = [];
-    zombie.traverse((child) => {
-        if (child.isMesh && child.userData.isHitbox) {
-            child.userData.zombieRoot = zombie;
-            hitMeshes.push(child);
-        }
-    });
-    
+    const hitMeshes = collectZombieMeshes(zombie);
     zombie.userData = {
         isZombieRoot: true,
-        health: 50 + gameState.wave * 10,
+        health: 1,
         speed: 0.03 + gameState.wave * 0.005,
         damage: 10 + gameState.wave * 2,
         attackCooldown: 0,
@@ -680,7 +647,16 @@ function spawnZombie() {
     gameState.zombiesSpawned++;
 }
 
-// findZombieRoot is kept as a fallback for hit detection
+function collectZombieMeshes(zombie) {
+    const meshes = [];
+    zombie.traverse((child) => {
+        if (child.isMesh || child.isSkinnedMesh) {
+            child.userData.zombieRoot = zombie;
+            meshes.push(child);
+        }
+    });
+    return meshes;
+}
 
 function findZombieRoot(object) {
     let current = object;
@@ -750,23 +726,19 @@ function shoot() {
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
 
-    // Check zombie hits using hitbox meshes
+    // Check zombie hits
     const zombieMeshes = zombies.flatMap((z) => z.userData?.hitMeshes ?? []);
-    const intersects = raycaster.intersectObjects(zombieMeshes, false);
+    const intersects = raycaster.intersectObjects(zombieMeshes, true);
 
     if (intersects.length > 0) {
         const hitObject = intersects[0].object;
         const zombie = hitObject.userData.zombieRoot ?? findZombieRoot(hitObject);
 
         if (zombie?.userData) {
-            // Check for headshot bonus
-            const isHeadshot = hitObject.userData.isHeadshot;
-            const damage = isHeadshot ? 50 : 25;  // Double damage for headshots
-            
-            zombie.userData.health -= damage;
+            zombie.userData.health -= 25;
             showHitMarker();
 
-            // Blood effect at hit point
+            // Blood effect placeholder
             createBloodEffect(intersects[0].point);
 
             if (zombie.userData.health <= 0) {
@@ -850,6 +822,7 @@ function killZombie(zombie) {
     if (index > -1) {
         zombies.splice(index, 1);
         scene.remove(zombie);
+        createGibEffect(zombie.position);
 
         gameState.kills++;
         gameState.score += 100;
@@ -863,6 +836,41 @@ function killZombie(zombie) {
             nextWave();
         }
     }
+}
+
+function createGibEffect(position) {
+    const pieces = [];
+    for (let i = 0; i < 12; i++) {
+        const chunk = new THREE.Mesh(
+            new THREE.BoxGeometry(0.08, 0.08, 0.08),
+            new THREE.MeshStandardMaterial({ color: 0x7a1a1a, roughness: 0.8 })
+        );
+        chunk.position.copy(position);
+        chunk.position.y += 0.6 + Math.random() * 0.6;
+        chunk.userData.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 0.35,
+            Math.random() * 0.35 + 0.15,
+            (Math.random() - 0.5) * 0.35
+        );
+        scene.add(chunk);
+        pieces.push(chunk);
+    }
+
+    let frames = 0;
+    const animateGibs = () => {
+        frames++;
+        pieces.forEach((piece) => {
+            piece.position.add(piece.userData.velocity);
+            piece.userData.velocity.y -= 0.02;
+        });
+
+        if (frames < 40) {
+            requestAnimationFrame(animateGibs);
+        } else {
+            pieces.forEach((piece) => scene.remove(piece));
+        }
+    };
+    animateGibs();
 }
 
 function addKillNotification() {
