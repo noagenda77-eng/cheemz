@@ -37,6 +37,7 @@ let buildings = [];
 let zombieModel = null;
 
 const ZOMBIE_MODEL_URL = 'assets/zombie.glb';
+const ZOMBIE_SCALE = 1.2;
 
 // Initialize Three.js
 function init() {
@@ -78,12 +79,21 @@ function loadZombieModel() {
         ZOMBIE_MODEL_URL,
         (gltf) => {
             zombieModel = gltf.scene;
+            centerModelOnFloor(zombieModel);
         },
         undefined,
         (error) => {
             console.error('Failed to load zombie model:', error);
         }
     );
+}
+
+function centerModelOnFloor(model) {
+    const bounds = new THREE.Box3().setFromObject(model);
+    if (!Number.isFinite(bounds.min.y)) {
+        return;
+    }
+    model.position.y -= bounds.min.y;
 }
 
 function setupLighting() {
@@ -394,13 +404,14 @@ function spawnZombie() {
     let zombie;
     if (zombieModel) {
         zombie = THREE.SkeletonUtils.clone(zombieModel);
+        centerModelOnFloor(zombie);
         zombie.traverse((child) => {
             if (child.isMesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
             }
         });
-        zombie.scale.set(1.2, 1.2, 1.2);
+        zombie.scale.set(ZOMBIE_SCALE, ZOMBIE_SCALE, ZOMBIE_SCALE);
     } else {
         zombie = new THREE.Group();
 
