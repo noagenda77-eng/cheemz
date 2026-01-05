@@ -79,7 +79,6 @@ function loadZombieModel() {
         ZOMBIE_MODEL_URL,
         (gltf) => {
             zombieModel = gltf.scene;
-            centerModelOnFloor(zombieModel);
         },
         undefined,
         (error) => {
@@ -89,11 +88,13 @@ function loadZombieModel() {
 }
 
 function centerModelOnFloor(model) {
+    model.updateMatrixWorld(true);
     const bounds = new THREE.Box3().setFromObject(model);
     if (!Number.isFinite(bounds.min.y)) {
         return;
     }
     model.position.y -= bounds.min.y;
+    model.updateMatrixWorld(true);
 }
 
 function setupLighting() {
@@ -403,15 +404,17 @@ function spawnZombie() {
 
     let zombie;
     if (zombieModel) {
-        zombie = THREE.SkeletonUtils.clone(zombieModel);
-        centerModelOnFloor(zombie);
-        zombie.traverse((child) => {
+        const zombieInstance = THREE.SkeletonUtils.clone(zombieModel);
+        zombie = new THREE.Group();
+        zombie.add(zombieInstance);
+        zombieInstance.scale.set(ZOMBIE_SCALE, ZOMBIE_SCALE, ZOMBIE_SCALE);
+        centerModelOnFloor(zombieInstance);
+        zombieInstance.traverse((child) => {
             if (child.isMesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
             }
         });
-        zombie.scale.set(ZOMBIE_SCALE, ZOMBIE_SCALE, ZOMBIE_SCALE);
     } else {
         zombie = new THREE.Group();
 
