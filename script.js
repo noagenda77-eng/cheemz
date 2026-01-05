@@ -489,12 +489,24 @@ function spawnZombie() {
         health: 50 + gameState.wave * 10,
         speed: 0.03 + gameState.wave * 0.005,
         damage: 10 + gameState.wave * 2,
-        attackCooldown: 0
+        attackCooldown: 0,
+        hitMeshes: collectZombieMeshes(zombie)
     };
 
     scene.add(zombie);
     zombies.push(zombie);
     gameState.zombiesSpawned++;
+}
+
+function collectZombieMeshes(zombie) {
+    const meshes = [];
+    zombie.traverse((child) => {
+        if (child.isMesh) {
+            child.userData.zombieRoot = zombie;
+            meshes.push(child);
+        }
+    });
+    return meshes;
 }
 
 function updateZombies() {
@@ -514,10 +526,6 @@ function updateZombies() {
 
         if (distanceToPlayer > 2) {
             zombie.position.add(direction.multiplyScalar(zombie.userData.speed));
-
-            // Walking animation
-            const time = Date.now() * 0.01;
-            zombie.position.y = Math.abs(Math.sin(time)) * 0.1;
         } else {
             // Attack player
             if (zombie.userData.attackCooldown <= 0) {
@@ -553,12 +561,12 @@ function shoot() {
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
 
     // Check zombie hits
-    const zombieMeshes = zombies.map((z) => z.children).flat();
+    const zombieMeshes = zombies.flatMap((z) => z.userData?.hitMeshes ?? []);
     const intersects = raycaster.intersectObjects(zombieMeshes);
 
     if (intersects.length > 0) {
         const hitObject = intersects[0].object;
-        const zombie = hitObject.parent;
+        const zombie = hitObject.userData.zombieRoot;
 
         if (zombie.userData) {
             zombie.userData.health -= 25;
