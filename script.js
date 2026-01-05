@@ -870,7 +870,7 @@ function createGibEffect(position) {
     const chunks = [];
     for (let i = 0; i < 36; i++) {
         const chunk = new THREE.Mesh(
-            new THREE.BoxGeometry(0.84, 0.84, 0.84),
+            new THREE.BoxGeometry(0.42, 0.42, 0.42),
             new THREE.MeshStandardMaterial({ color: 0x7a1a1a, roughness: 0.8 })
         );
         chunk.position.copy(position);
@@ -880,6 +880,7 @@ function createGibEffect(position) {
             Math.random() * 0.35 + 0.15,
             (Math.random() - 0.5) * 0.35
         );
+        chunk.userData.bounces = 2;
         scene.add(chunk);
         chunks.push(chunk);
     }
@@ -890,9 +891,16 @@ function createGibEffect(position) {
         chunks.forEach((chunk) => {
             chunk.position.add(chunk.userData.velocity);
             chunk.userData.velocity.y -= 0.02;
+            if (chunk.position.y <= 0.2 && chunk.userData.bounces > 0) {
+                chunk.position.y = 0.2;
+                chunk.userData.velocity.y *= -0.45;
+                chunk.userData.velocity.x *= 0.6;
+                chunk.userData.velocity.z *= 0.6;
+                chunk.userData.bounces -= 1;
+            }
         });
 
-        if (frames < 40) {
+        if (frames < 70) {
             requestAnimationFrame(animateGibs);
         } else {
             chunks.forEach((chunk) => scene.remove(chunk));
