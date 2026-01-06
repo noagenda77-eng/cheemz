@@ -2,7 +2,7 @@
 const gameState = {
     health: 100,
     maxHealth: 100,
-    regenRate: 3,
+    regenRate: 1,
     damageFlash: 0,
     score: 0,
     kills: 0,
@@ -1267,9 +1267,9 @@ function animate() {
         }
         const overlay = document.getElementById('damage-overlay');
         const healthRatio = gameState.health / gameState.maxHealth;
-        const baseTint = (1 - healthRatio) * 0.6;
-        const flashTint = gameState.damageFlash * 0.4;
-        overlay.style.opacity = Math.min(0.9, baseTint + flashTint).toFixed(3);
+        const baseTint = Math.pow(1 - healthRatio, 0.7) * 0.85;
+        const flashTint = gameState.damageFlash * 0.45;
+        overlay.style.opacity = Math.min(0.95, baseTint + flashTint).toFixed(3);
         updateHealthDisplay();
 
         // Spawn zombies periodically
