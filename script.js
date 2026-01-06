@@ -634,6 +634,7 @@ function spawnZombie() {
             if (child.isMesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
+                child.frustumCulled = false;
                 const materials = Array.isArray(child.material)
                     ? child.material
                     : [child.material];
@@ -715,6 +716,12 @@ function spawnZombie() {
         zombie.add(rightLeg);
     }
 
+    zombie.traverse((child) => {
+        if (child.isMesh) {
+            child.frustumCulled = false;
+        }
+    });
+
     // Create invisible hitbox for reliable raycasting
     // This solves the issue where skinned meshes don't raycast properly
     const hitboxMaterial = new THREE.MeshBasicMaterial({
@@ -763,8 +770,8 @@ function spawnZombie() {
         health: 1,
         speed: 0.03 + gameState.wave * 0.005,
         damage: 10 + gameState.wave * 2,
-        stopRange: 1.6,
-        minRange: 1.1,
+        stopRange: 1.0,
+        minRange: 0,
         collisionRadius: 0.7,
         attackCooldown: 0,
         hitMeshes
@@ -812,8 +819,8 @@ function updateZombies() {
         // Face player
         zombie.lookAt(player.position.x, zombie.position.y, player.position.z);
 
-        const stopRange = zombie.userData.stopRange ?? 1.6;
-        const minRange = zombie.userData.minRange ?? 1.1;
+        const stopRange = zombie.userData.stopRange ?? 1.0;
+        const minRange = zombie.userData.minRange ?? 0;
 
         if (horizontalDistance > stopRange) {
             const delta = direction.clone().multiplyScalar(zombie.userData.speed);
