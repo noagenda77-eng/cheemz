@@ -112,20 +112,6 @@ body {
     line-height: 1;
 }
 
-.health-bar-container {
-    width: 200px;
-    height: 8px;
-    background: rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 100, 100, 0.3);
-    margin-top: 10px;
-}
-
-.health-bar {
-    height: 100%;
-    background: linear-gradient(90deg, #ff2222, #ff6666);
-    box-shadow: 0 0 10px rgba(255, 34, 34, 0.5);
-    transition: width 0.3s ease;
-}
 
 /* Ammo display */
 .ammo-display {

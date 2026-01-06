@@ -2,12 +2,14 @@
 const gameState = {
     health: 100,
     maxHealth: 100,
+    regenRate: 6,
+    damageFlash: 0,
     score: 0,
     kills: 0,
     wave: 1,
     ammo: 30,
     maxAmmo: 30,
-    reserveAmmo: 120,
+    reserveAmmo: Infinity,
     isReloading: false,
     isPlaying: false,
     isSprinting: false,
@@ -769,7 +771,7 @@ function spawnZombie() {
         isZombieRoot: true,
         health: 1,
         speed: 0.03 + gameState.wave * 0.005,
-        damage: 10 + gameState.wave * 2,
+        damage: 20,
         stopRange: 1.0,
         minRange: 0,
         collisionRadius: 0.7,
@@ -1044,9 +1046,6 @@ function nextWave() {
     gameState.zombiesSpawned = 0;
     gameState.zombiesKilled = 0;
 
-    // Bonus ammo
-    gameState.reserveAmmo += 30;
-
     updateHUD();
 
     // Wave announcement effect
@@ -1059,17 +1058,14 @@ function nextWave() {
 }
 
 function reload() {
-    if (gameState.isReloading || gameState.reserveAmmo <= 0 || gameState.ammo === gameState.maxAmmo) return;
+    if (gameState.isReloading || gameState.ammo === gameState.maxAmmo) return;
 
     gameState.isReloading = true;
     document.getElementById('reload-indicator').style.opacity = '1';
 
     setTimeout(() => {
         const needed = gameState.maxAmmo - gameState.ammo;
-        const toReload = Math.min(needed, gameState.reserveAmmo);
-
-        gameState.ammo += toReload;
-        gameState.reserveAmmo -= toReload;
+        gameState.ammo += needed;
         gameState.isReloading = false;
 
         document.getElementById('reload-indicator').style.opacity = '0';
@@ -1078,12 +1074,8 @@ function reload() {
 }
 
 function takeDamage(amount) {
-    gameState.health -= amount;
-
-    // Damage overlay flash
-    const overlay = document.getElementById('damage-overlay');
-    overlay.style.opacity = '0.8';
-    setTimeout(() => overlay.style.opacity = '0', 200);
+    gameState.health = Math.max(0, gameState.health - amount);
+    gameState.damageFlash = Math.min(1, gameState.damageFlash + 0.6);
 
     updateHealthDisplay();
 
@@ -1107,11 +1099,12 @@ function resetGame() {
     gameState.kills = 0;
     gameState.wave = 1;
     gameState.ammo = 30;
-    gameState.reserveAmmo = 120;
+    gameState.reserveAmmo = Infinity;
     gameState.isReloading = false;
     gameState.zombiesInWave = 5;
     gameState.zombiesSpawned = 0;
     gameState.zombiesKilled = 0;
+    gameState.damageFlash = 0;
 
     // Remove all zombies
     zombies.forEach((z) => scene.remove(z));
@@ -1133,12 +1126,13 @@ function updateHUD() {
 
 function updateHealthDisplay() {
     document.getElementById('health-value').textContent = Math.max(0, gameState.health);
-    document.getElementById('health-bar').style.width = Math.max(0, gameState.health) + '%';
 }
 
 function updateAmmoDisplay() {
     document.getElementById('ammo-current').textContent = gameState.ammo;
-    document.getElementById('ammo-reserve').textContent = gameState.reserveAmmo;
+    document.getElementById('ammo-reserve').textContent = Number.isFinite(gameState.reserveAmmo)
+        ? gameState.reserveAmmo
+        : '∞';
 }
 
 function setupEventListeners() {
@@ -1259,6 +1253,22 @@ function animate() {
                 zombie.userData.mixer.update(delta);
             }
         });
+
+        if (gameState.health < gameState.maxHealth) {
+            gameState.health = Math.min(
+                gameState.maxHealth,
+                gameState.health + gameState.regenRate * delta
+            );
+        }
+        if (gameState.damageFlash > 0) {
+            gameState.damageFlash = Math.max(0, gameState.damageFlash - delta * 1.5);
+        }
+        const overlay = document.getElementById('damage-overlay');
+        const healthRatio = gameState.health / gameState.maxHealth;
+        const baseTint = (1 - healthRatio) * 0.6;
+        const flashTint = gameState.damageFlash * 0.4;
+        overlay.style.opacity = Math.min(0.9, baseTint + flashTint).toFixed(3);
+        updateHealthDisplay();
 
         // Spawn zombies periodically
         spawnTimer++;
