@@ -763,7 +763,8 @@ function spawnZombie() {
         health: 1,
         speed: 0.03 + gameState.wave * 0.005,
         damage: 10 + gameState.wave * 2,
-        stopRange: 2.2,
+        stopRange: 1.6,
+        minRange: 1.1,
         collisionRadius: 0.7,
         attackCooldown: 0,
         hitMeshes
@@ -811,7 +812,8 @@ function updateZombies() {
         // Face player
         zombie.lookAt(player.position.x, zombie.position.y, player.position.z);
 
-        const stopRange = zombie.userData.stopRange ?? 2.2;
+        const stopRange = zombie.userData.stopRange ?? 1.6;
+        const minRange = zombie.userData.minRange ?? 1.1;
 
         if (horizontalDistance > stopRange) {
             const delta = direction.clone().multiplyScalar(zombie.userData.speed);
@@ -822,7 +824,7 @@ function updateZombies() {
                 takeDamage(zombie.userData.damage);
                 zombie.userData.attackCooldown = 60;
             }
-            if (horizontalDistance < stopRange * 0.7) {
+            if (horizontalDistance < minRange) {
                 const delta = direction.clone().multiplyScalar(-zombie.userData.speed);
                 moveWithCollisions(zombie.position, delta, zombie.userData.collisionRadius ?? 0.7);
             }
