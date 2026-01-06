@@ -1120,12 +1120,14 @@ function updateHUD() {
     document.getElementById('score-value').textContent = gameState.score;
     document.getElementById('kills-value').textContent = gameState.kills;
     document.getElementById('wave-number').textContent = gameState.wave;
-    updateHealthDisplay();
     updateAmmoDisplay();
 }
 
 function updateHealthDisplay() {
-    document.getElementById('health-value').textContent = Math.max(0, gameState.health);
+    const healthValue = document.getElementById('health-value');
+    if (healthValue) {
+        healthValue.textContent = Math.max(0, gameState.health);
+    }
 }
 
 function updateAmmoDisplay() {
