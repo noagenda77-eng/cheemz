@@ -550,6 +550,19 @@ function spawnZombie() {
             if (child.isMesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
+                const materials = Array.isArray(child.material)
+                    ? child.material
+                    : [child.material];
+                materials.forEach((material) => {
+                    if (material?.isMeshStandardMaterial || material?.isMeshPhysicalMaterial) {
+                        material.roughness = Math.max(material.roughness ?? 0.7, 0.8);
+                        material.metalness = Math.min(material.metalness ?? 0.2, 0.1);
+                        if (material.envMapIntensity !== undefined) {
+                            material.envMapIntensity = Math.min(material.envMapIntensity, 0.3);
+                        }
+                        material.needsUpdate = true;
+                    }
+                });
             }
         });
     } else {
@@ -558,7 +571,8 @@ function spawnZombie() {
         // Body (placeholder - cylinder)
         const bodyMaterial = new THREE.MeshStandardMaterial({
             color: 0x3a5a3a,
-            roughness: 0.8
+            roughness: 0.9,
+            metalness: 0.05
         });
 
         const body = new THREE.Mesh(
@@ -571,7 +585,11 @@ function spawnZombie() {
         // Head (placeholder - sphere)
         const head = new THREE.Mesh(
             new THREE.SphereGeometry(0.35),
-            new THREE.MeshStandardMaterial({ color: 0x4a6a4a })
+            new THREE.MeshStandardMaterial({
+                color: 0x4a6a4a,
+                roughness: 0.9,
+                metalness: 0.05
+            })
         );
         head.position.y = 2.2;
         zombie.add(head);
@@ -661,6 +679,7 @@ function spawnZombie() {
         health: 1,
         speed: 0.03 + gameState.wave * 0.005,
         damage: 10 + gameState.wave * 2,
+        stopRange: 2.2,
         attackCooldown: 0,
         hitMeshes
     };
@@ -701,20 +720,26 @@ function updateZombies() {
         const direction = new THREE.Vector3();
         direction.subVectors(player.position, zombie.position);
         direction.y = 0;
-        direction.normalize();
+        const horizontalDistance = Math.hypot(direction.x, direction.z);
+        if (horizontalDistance > 0.0001) {
+            direction.normalize();
+        }
 
         // Face player
         zombie.lookAt(player.position.x, zombie.position.y, player.position.z);
 
-        const distanceToPlayer = zombie.position.distanceTo(player.position);
+        const stopRange = zombie.userData.stopRange ?? 2.2;
 
-        if (distanceToPlayer > 2) {
+        if (horizontalDistance > stopRange) {
             zombie.position.add(direction.multiplyScalar(zombie.userData.speed));
         } else {
             // Attack player
             if (zombie.userData.attackCooldown <= 0) {
                 takeDamage(zombie.userData.damage);
                 zombie.userData.attackCooldown = 60;
+            }
+            if (horizontalDistance < stopRange * 0.7) {
+                zombie.position.add(direction.multiplyScalar(-zombie.userData.speed));
             }
         }
 
