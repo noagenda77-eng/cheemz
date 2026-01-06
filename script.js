@@ -679,6 +679,7 @@ function spawnZombie() {
         health: 1,
         speed: 0.03 + gameState.wave * 0.005,
         damage: 10 + gameState.wave * 2,
+        stopRange: 2.2,
         attackCooldown: 0,
         hitMeshes
     };
@@ -719,20 +720,26 @@ function updateZombies() {
         const direction = new THREE.Vector3();
         direction.subVectors(player.position, zombie.position);
         direction.y = 0;
-        direction.normalize();
+        const horizontalDistance = Math.hypot(direction.x, direction.z);
+        if (horizontalDistance > 0.0001) {
+            direction.normalize();
+        }
 
         // Face player
         zombie.lookAt(player.position.x, zombie.position.y, player.position.z);
 
-        const distanceToPlayer = zombie.position.distanceTo(player.position);
+        const stopRange = zombie.userData.stopRange ?? 2.2;
 
-        if (distanceToPlayer > 2) {
+        if (horizontalDistance > stopRange) {
             zombie.position.add(direction.multiplyScalar(zombie.userData.speed));
         } else {
             // Attack player
             if (zombie.userData.attackCooldown <= 0) {
                 takeDamage(zombie.userData.damage);
                 zombie.userData.attackCooldown = 60;
+            }
+            if (horizontalDistance < stopRange * 0.7) {
+                zombie.position.add(direction.multiplyScalar(-zombie.userData.speed));
             }
         }
 
