@@ -550,6 +550,19 @@ function spawnZombie() {
             if (child.isMesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
+                const materials = Array.isArray(child.material)
+                    ? child.material
+                    : [child.material];
+                materials.forEach((material) => {
+                    if (material?.isMeshStandardMaterial || material?.isMeshPhysicalMaterial) {
+                        material.roughness = Math.max(material.roughness ?? 0.7, 0.8);
+                        material.metalness = Math.min(material.metalness ?? 0.2, 0.1);
+                        if (material.envMapIntensity !== undefined) {
+                            material.envMapIntensity = Math.min(material.envMapIntensity, 0.3);
+                        }
+                        material.needsUpdate = true;
+                    }
+                });
             }
         });
     } else {
@@ -558,7 +571,8 @@ function spawnZombie() {
         // Body (placeholder - cylinder)
         const bodyMaterial = new THREE.MeshStandardMaterial({
             color: 0x3a5a3a,
-            roughness: 0.8
+            roughness: 0.9,
+            metalness: 0.05
         });
 
         const body = new THREE.Mesh(
@@ -571,7 +585,11 @@ function spawnZombie() {
         // Head (placeholder - sphere)
         const head = new THREE.Mesh(
             new THREE.SphereGeometry(0.35),
-            new THREE.MeshStandardMaterial({ color: 0x4a6a4a })
+            new THREE.MeshStandardMaterial({
+                color: 0x4a6a4a,
+                roughness: 0.9,
+                metalness: 0.05
+            })
         );
         head.position.y = 2.2;
         zombie.add(head);
