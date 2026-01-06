@@ -2,7 +2,7 @@
 const gameState = {
     health: 100,
     maxHealth: 100,
-    regenRate: 6,
+    regenRate: 3,
     damageFlash: 0,
     score: 0,
     kills: 0,
