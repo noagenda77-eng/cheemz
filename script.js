@@ -2,7 +2,7 @@
 const gameState = {
     health: 100,
     maxHealth: 100,
-    regenRate: 1,
+    regenRate: 2,
     damageFlash: 0,
     score: 0,
     kills: 0,
@@ -625,7 +625,14 @@ function createLightBeam() {
 function getZombieSpawnPosition(spawnRadius = 0.7) {
     const minDistance = 18;
     const maxDistance = 35;
-    const maxAttempts = 20;
+    const maxAttempts = 40;
+    const boundsLimit = 38;
+
+    const clampToBounds = (position) => {
+        position.x = Math.max(-boundsLimit, Math.min(boundsLimit, position.x));
+        position.z = Math.max(-boundsLimit, Math.min(boundsLimit, position.z));
+        return position;
+    };
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         const angle = Math.random() * Math.PI * 2;
@@ -637,20 +644,37 @@ function getZombieSpawnPosition(spawnRadius = 0.7) {
         );
 
         if (!isPositionBlocked(candidate, spawnRadius)) {
-            candidate.x = Math.max(-38, Math.min(38, candidate.x));
-            candidate.z = Math.max(-38, Math.min(38, candidate.z));
-            return candidate;
+            return clampToBounds(candidate);
         }
     }
 
-    const fallback = new THREE.Vector3(
-        player.position.x + maxDistance,
-        0,
-        player.position.z
-    );
-    fallback.x = Math.max(-38, Math.min(38, fallback.x));
-    fallback.z = Math.max(-38, Math.min(38, fallback.z));
-    return fallback;
+    for (let distance = maxDistance; distance >= minDistance; distance -= 2) {
+        for (let step = 0; step < 16; step++) {
+            const angle = (Math.PI * 2 * step) / 16;
+            const candidate = new THREE.Vector3(
+                player.position.x + Math.cos(angle) * distance,
+                0,
+                player.position.z + Math.sin(angle) * distance
+            );
+            if (!isPositionBlocked(candidate, spawnRadius)) {
+                return clampToBounds(candidate);
+            }
+        }
+    }
+
+    for (let step = 0; step < 8; step++) {
+        const angle = (Math.PI * 2 * step) / 8;
+        const fallback = new THREE.Vector3(
+            player.position.x + Math.cos(angle) * maxDistance,
+            0,
+            player.position.z + Math.sin(angle) * maxDistance
+        );
+        if (!isPositionBlocked(fallback, spawnRadius)) {
+            return clampToBounds(fallback);
+        }
+    }
+
+    return clampToBounds(player.position.clone());
 }
 
 function spawnZombie() {
@@ -1292,8 +1316,10 @@ function animate() {
         }
         const overlay = document.getElementById('damage-overlay');
         const healthRatio = gameState.health / gameState.maxHealth;
-        const baseTint = Math.pow(1 - healthRatio, 0.6) * 1.1;
-        const flashTint = gameState.damageFlash * 0.6;
+        const baseTint = Math.pow(1 - healthRatio, 0.55) * 1.3;
+        const flashTint = gameState.damageFlash * 0.75;
+        const redIntensity = Math.min(1, 0.35 + (1 - healthRatio) * 0.65 + gameState.damageFlash * 0.2);
+        overlay.style.setProperty('--damage-red', redIntensity.toFixed(3));
         overlay.style.opacity = Math.min(1, baseTint + flashTint).toFixed(3);
         updateHealthDisplay();
 
