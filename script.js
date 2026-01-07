@@ -2,7 +2,7 @@
 const gameState = {
     health: 100,
     maxHealth: 100,
-    regenRate: 1,
+    regenRate: 2,
     damageFlash: 0,
     score: 0,
     kills: 0,
@@ -622,6 +622,61 @@ function createLightBeam() {
     scene.add(beam);
 }
 
+function getZombieSpawnPosition(spawnRadius = 0.7) {
+    const minDistance = 18;
+    const maxDistance = 35;
+    const maxAttempts = 40;
+    const boundsLimit = 38;
+
+    const clampToBounds = (position) => {
+        position.x = Math.max(-boundsLimit, Math.min(boundsLimit, position.x));
+        position.z = Math.max(-boundsLimit, Math.min(boundsLimit, position.z));
+        return position;
+    };
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const angle = Math.random() * Math.PI * 2;
+        const distance = minDistance + Math.random() * (maxDistance - minDistance);
+        const candidate = new THREE.Vector3(
+            player.position.x + Math.cos(angle) * distance,
+            0,
+            player.position.z + Math.sin(angle) * distance
+        );
+
+        if (!isPositionBlocked(candidate, spawnRadius)) {
+            return clampToBounds(candidate);
+        }
+    }
+
+    for (let distance = maxDistance; distance >= minDistance; distance -= 2) {
+        for (let step = 0; step < 16; step++) {
+            const angle = (Math.PI * 2 * step) / 16;
+            const candidate = new THREE.Vector3(
+                player.position.x + Math.cos(angle) * distance,
+                0,
+                player.position.z + Math.sin(angle) * distance
+            );
+            if (!isPositionBlocked(candidate, spawnRadius)) {
+                return clampToBounds(candidate);
+            }
+        }
+    }
+
+    for (let step = 0; step < 8; step++) {
+        const angle = (Math.PI * 2 * step) / 8;
+        const fallback = new THREE.Vector3(
+            player.position.x + Math.cos(angle) * maxDistance,
+            0,
+            player.position.z + Math.sin(angle) * maxDistance
+        );
+        if (!isPositionBlocked(fallback, spawnRadius)) {
+            return clampToBounds(fallback);
+        }
+    }
+
+    return clampToBounds(player.position.clone());
+}
+
 function spawnZombie() {
     if (gameState.zombiesSpawned >= gameState.zombiesInWave) return;
 
@@ -749,14 +804,8 @@ function spawnZombie() {
     headHitbox.userData.isHeadshot = true;  // For potential headshot bonus
     zombie.add(headHitbox);
 
-    // Spawn position (random around player)
-    const angle = Math.random() * Math.PI * 2;
-    const distance = 25 + Math.random() * 15;
-    zombie.position.set(
-        player.position.x + Math.cos(angle) * distance,
-        0,
-        player.position.z + Math.sin(angle) * distance
-    );
+    // Spawn position (random around player, avoiding collisions)
+    zombie.position.copy(getZombieSpawnPosition(0.7));
 
     // Collect hitbox meshes for raycasting
     const hitMeshes = [];
@@ -1267,9 +1316,9 @@ function animate() {
         }
         const overlay = document.getElementById('damage-overlay');
         const healthRatio = gameState.health / gameState.maxHealth;
-        const baseTint = Math.pow(1 - healthRatio, 0.7) * 0.85;
-        const flashTint = gameState.damageFlash * 0.45;
-        overlay.style.opacity = Math.min(0.95, baseTint + flashTint).toFixed(3);
+        const baseTint = Math.pow(1 - healthRatio, 0.55) * 1.3;
+        const flashTint = gameState.damageFlash * 0.75;
+        overlay.style.opacity = Math.min(1, baseTint + flashTint).toFixed(3);
         updateHealthDisplay();
 
         // Spawn zombies periodically

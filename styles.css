@@ -190,7 +190,7 @@ body {
     bottom: 0;
     pointer-events: none;
     z-index: 90;
-    background: radial-gradient(circle, transparent 30%, rgba(255, 0, 0, 0.3) 100%);
+    background: radial-gradient(circle, transparent 20%, rgba(255, 0, 0, 0.75) 100%);
     opacity: 0;
     transition: opacity 0.1s ease;
 }
