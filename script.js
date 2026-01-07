@@ -622,6 +622,37 @@ function createLightBeam() {
     scene.add(beam);
 }
 
+function getZombieSpawnPosition(spawnRadius = 0.7) {
+    const minDistance = 18;
+    const maxDistance = 35;
+    const maxAttempts = 20;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const angle = Math.random() * Math.PI * 2;
+        const distance = minDistance + Math.random() * (maxDistance - minDistance);
+        const candidate = new THREE.Vector3(
+            player.position.x + Math.cos(angle) * distance,
+            0,
+            player.position.z + Math.sin(angle) * distance
+        );
+
+        if (!isPositionBlocked(candidate, spawnRadius)) {
+            candidate.x = Math.max(-38, Math.min(38, candidate.x));
+            candidate.z = Math.max(-38, Math.min(38, candidate.z));
+            return candidate;
+        }
+    }
+
+    const fallback = new THREE.Vector3(
+        player.position.x + maxDistance,
+        0,
+        player.position.z
+    );
+    fallback.x = Math.max(-38, Math.min(38, fallback.x));
+    fallback.z = Math.max(-38, Math.min(38, fallback.z));
+    return fallback;
+}
+
 function spawnZombie() {
     if (gameState.zombiesSpawned >= gameState.zombiesInWave) return;
 
@@ -749,14 +780,8 @@ function spawnZombie() {
     headHitbox.userData.isHeadshot = true;  // For potential headshot bonus
     zombie.add(headHitbox);
 
-    // Spawn position (random around player)
-    const angle = Math.random() * Math.PI * 2;
-    const distance = 25 + Math.random() * 15;
-    zombie.position.set(
-        player.position.x + Math.cos(angle) * distance,
-        0,
-        player.position.z + Math.sin(angle) * distance
-    );
+    // Spawn position (random around player, avoiding collisions)
+    zombie.position.copy(getZombieSpawnPosition(0.7));
 
     // Collect hitbox meshes for raycasting
     const hitMeshes = [];
@@ -1267,9 +1292,9 @@ function animate() {
         }
         const overlay = document.getElementById('damage-overlay');
         const healthRatio = gameState.health / gameState.maxHealth;
-        const baseTint = Math.pow(1 - healthRatio, 0.7) * 0.85;
-        const flashTint = gameState.damageFlash * 0.45;
-        overlay.style.opacity = Math.min(0.95, baseTint + flashTint).toFixed(3);
+        const baseTint = Math.pow(1 - healthRatio, 0.6) * 1.1;
+        const flashTint = gameState.damageFlash * 0.6;
+        overlay.style.opacity = Math.min(1, baseTint + flashTint).toFixed(3);
         updateHealthDisplay();
 
         // Spawn zombies periodically
