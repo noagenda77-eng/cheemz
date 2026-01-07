@@ -1370,8 +1370,6 @@ function animate() {
         const healthRatio = gameState.health / gameState.maxHealth;
         const baseTint = Math.pow(1 - healthRatio, 0.55) * 1.3;
         const flashTint = gameState.damageFlash * 0.75;
-        const redIntensity = Math.min(1, 0.35 + (1 - healthRatio) * 0.65 + gameState.damageFlash * 0.2);
-        overlay.style.setProperty('--damage-red', redIntensity.toFixed(3));
         overlay.style.opacity = Math.min(1, baseTint + flashTint).toFixed(3);
         updateHealthDisplay();
 
