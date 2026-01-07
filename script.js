@@ -13,6 +13,7 @@ const gameState = {
     isReloading: false,
     isPlaying: false,
     isSprinting: false,
+    isAiming: false,
     zombiesInWave: 5,
     zombiesSpawned: 0,
     zombiesKilled: 0
@@ -25,7 +26,10 @@ const player = {
     rotation: { x: 0, y: 0 },
     speed: 0.15,
     sprintSpeed: 0.25,
-    collisionRadius: 0.6
+    collisionRadius: 0.6,
+    verticalVelocity: 0,
+    isOnGround: true,
+    jumpQueued: false
 };
 
 // Input state
@@ -48,6 +52,9 @@ let weaponRig = null;
 let muzzleMesh = null;
 let gunshotAudio = null;
 const gunBasePosition = new THREE.Vector3();
+const gunAimPosition = new THREE.Vector3(0.22, -0.28, -0.35);
+const BASE_FOV = 75;
+const AIM_FOV = 60;
 const animationClock = new THREE.Clock();
 const collisionBox = new THREE.Box3();
 const navigationRaycaster = new THREE.Raycaster();
@@ -61,7 +68,7 @@ function init() {
     scene.background = new THREE.Color(0x0a0a15);
     scene.fog = new THREE.FogExp2(0x0a0a15, 0.02);
 
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera = new THREE.PerspectiveCamera(BASE_FOV, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.copy(player.position);
     scene.add(camera);
 
@@ -1216,7 +1223,18 @@ function setupEventListeners() {
         if (e.button === 0 && gameState.isPlaying && document.pointerLockElement) {
             shoot();
         }
+        if (e.button === 2 && gameState.isPlaying) {
+            gameState.isAiming = true;
+        }
     });
+
+    document.addEventListener('mouseup', (e) => {
+        if (e.button === 2) {
+            gameState.isAiming = false;
+        }
+    });
+
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
 
     // Keyboard
     document.addEventListener('keydown', (e) => {
@@ -1227,6 +1245,9 @@ function setupEventListeners() {
         }
         if (e.code === 'ShiftLeft') {
             gameState.isSprinting = true;
+        }
+        if (e.code === 'Space' && gameState.isPlaying && !player.jumpQueued) {
+            player.jumpQueued = true;
         }
     });
 
@@ -1257,6 +1278,9 @@ function updatePlayer() {
     if (!gameState.isPlaying) return;
 
     const speed = gameState.isSprinting ? player.sprintSpeed : player.speed;
+    const groundY = 2;
+    const gravity = 0.012;
+    const jumpStrength = 0.22;
 
     // Movement
     const forward = new THREE.Vector3();
@@ -1277,6 +1301,24 @@ function updatePlayer() {
     if (move.lengthSq() > 0) {
         move.normalize().multiplyScalar(speed);
         moveWithCollisions(player.position, move, player.collisionRadius);
+    }
+
+    if (player.jumpQueued && player.isOnGround) {
+        player.verticalVelocity = jumpStrength;
+        player.isOnGround = false;
+        player.jumpQueued = false;
+    } else if (player.jumpQueued && !player.isOnGround) {
+        player.jumpQueued = false;
+    }
+
+    if (!player.isOnGround) {
+        player.verticalVelocity -= gravity;
+        player.position.y += player.verticalVelocity;
+        if (player.position.y <= groundY) {
+            player.position.y = groundY;
+            player.verticalVelocity = 0;
+            player.isOnGround = true;
+        }
     }
 
     // Boundary check
@@ -1304,6 +1346,16 @@ function animate() {
                 zombie.userData.mixer.update(delta);
             }
         });
+
+        const targetFov = gameState.isAiming ? AIM_FOV : BASE_FOV;
+        if (Math.abs(camera.fov - targetFov) > 0.01) {
+            camera.fov += (targetFov - camera.fov) * 0.12;
+            camera.updateProjectionMatrix();
+        }
+        if (gunModel) {
+            const targetGunPosition = gameState.isAiming ? gunAimPosition : gunBasePosition;
+            gunModel.position.lerp(targetGunPosition, 0.18);
+        }
 
         if (gameState.health < gameState.maxHealth) {
             gameState.health = Math.min(
