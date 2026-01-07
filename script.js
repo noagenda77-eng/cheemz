@@ -61,6 +61,7 @@ const navigationRaycaster = new THREE.Raycaster();
 
 const ZOMBIE_MODEL_URL = 'assets/zombie.glb';
 const ZOMBIE_SCALE = 1.2;
+const GROUND_TEXTURE_URL = 'assets/ground.png';
 
 // Initialize Three.js
 function init() {
@@ -296,8 +297,12 @@ function updateMuzzleFlashPosition() {
 function createEnvironment() {
     // Ground
     const groundGeometry = new THREE.PlaneGeometry(200, 200);
+    const groundTexture = new THREE.TextureLoader().load(GROUND_TEXTURE_URL);
+    groundTexture.wrapS = THREE.RepeatWrapping;
+    groundTexture.wrapT = THREE.RepeatWrapping;
+    groundTexture.repeat.set(8, 8);
     const groundMaterial = new THREE.MeshStandardMaterial({
-        color: 0x1a1a1a,
+        map: groundTexture,
         roughness: 0.9,
         metalness: 0.1
     });
