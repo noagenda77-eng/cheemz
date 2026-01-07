@@ -26,7 +26,7 @@ const player = {
     rotation: { x: 0, y: 0 },
     speed: 0.15,
     sprintSpeed: 0.25,
-    collisionRadius: 0.6,
+    collisionRadius: 0.4,
     verticalVelocity: 0,
     isOnGround: true,
     jumpQueued: false
@@ -54,7 +54,7 @@ let gunshotAudio = null;
 const gunBasePosition = new THREE.Vector3();
 const gunAimPosition = new THREE.Vector3(0.22, -0.28, -0.35);
 const BASE_FOV = 75;
-const AIM_FOV = 60;
+const AIM_FOV = 25;
 const animationClock = new THREE.Clock();
 const collisionBox = new THREE.Box3();
 const navigationRaycaster = new THREE.Raycaster();
@@ -629,7 +629,7 @@ function createLightBeam() {
     scene.add(beam);
 }
 
-function getZombieSpawnPosition(spawnRadius = 0.7) {
+function getZombieSpawnPosition(spawnRadius = 0.5) {
     const minDistance = 18;
     const maxDistance = 35;
     const maxAttempts = 40;
@@ -812,7 +812,7 @@ function spawnZombie() {
     zombie.add(headHitbox);
 
     // Spawn position (random around player, avoiding collisions)
-    zombie.position.copy(getZombieSpawnPosition(0.7));
+    zombie.position.copy(getZombieSpawnPosition(0.5));
 
     // Collect hitbox meshes for raycasting
     const hitMeshes = [];
@@ -830,7 +830,7 @@ function spawnZombie() {
         damage: 20,
         stopRange: 1.0,
         minRange: 0,
-        collisionRadius: 0.7,
+        collisionRadius: 0.5,
         attackCooldown: 0,
         hitMeshes
     };
@@ -1370,6 +1370,8 @@ function animate() {
         const healthRatio = gameState.health / gameState.maxHealth;
         const baseTint = Math.pow(1 - healthRatio, 0.55) * 1.3;
         const flashTint = gameState.damageFlash * 0.75;
+        const redIntensity = Math.min(1, 0.35 + (1 - healthRatio) * 0.65 + gameState.damageFlash * 0.2);
+        overlay.style.setProperty('--damage-red', redIntensity.toFixed(3));
         overlay.style.opacity = Math.min(1, baseTint + flashTint).toFixed(3);
         updateHealthDisplay();
 
