@@ -1140,7 +1140,7 @@ function nextWave() {
     gameState.zombiesKilled = 0;
 
     updateHUD();
-    playWaveSound();
+    scheduleWaveStart();
 
     // Wave announcement effect
     const waveNumber = document.getElementById('wave-number');
@@ -1149,6 +1149,23 @@ function nextWave() {
     setTimeout(() => {
         waveNumber.style.transform = 'scale(1)';
     }, 300);
+}
+
+function showWaveBanner() {
+    const waveBanner = document.getElementById('wave-banner');
+    if (!waveBanner) return;
+    waveBanner.textContent = `WAVE ${gameState.wave}`;
+    waveBanner.classList.remove('show');
+    void waveBanner.offsetWidth;
+    waveBanner.classList.add('show');
+}
+
+function scheduleWaveStart() {
+    wavePending = true;
+    waveDelayTimer = 5;
+    spawnTimer = 0;
+    playWaveSound();
+    showWaveBanner();
 }
 
 function reload() {
@@ -1237,6 +1254,7 @@ function setupEventListeners() {
         document.getElementById('start-screen').style.display = 'none';
         gameState.isPlaying = true;
         document.body.requestPointerLock();
+        scheduleWaveStart();
     });
 
     // Restart game
@@ -1245,6 +1263,7 @@ function setupEventListeners() {
         resetGame();
         gameState.isPlaying = true;
         document.body.requestPointerLock();
+        scheduleWaveStart();
     });
 
     // Mouse look
@@ -1371,6 +1390,8 @@ function updatePlayer() {
 }
 
 let spawnTimer = 0;
+let waveDelayTimer = 0;
+let wavePending = false;
 
 function animate() {
     requestAnimationFrame(animate);
@@ -1384,6 +1405,14 @@ function animate() {
                 zombie.userData.mixer.update(delta);
             }
         });
+
+        if (wavePending) {
+            waveDelayTimer = Math.max(0, waveDelayTimer - delta);
+            if (waveDelayTimer <= 0) {
+                wavePending = false;
+                spawnTimer = 0;
+            }
+        }
 
         const targetFov = gameState.isAiming ? AIM_FOV : BASE_FOV;
         if (Math.abs(camera.fov - targetFov) > 0.01) {
@@ -1414,8 +1443,10 @@ function animate() {
         updateHealthDisplay();
 
         // Spawn zombies periodically
-        spawnTimer++;
-        if (spawnTimer >= 120 && gameState.zombiesSpawned < gameState.zombiesInWave) {
+        if (!wavePending) {
+            spawnTimer++;
+        }
+        if (!wavePending && spawnTimer >= 120 && gameState.zombiesSpawned < gameState.zombiesInWave) {
             spawnZombie();
             spawnTimer = 0;
         }
