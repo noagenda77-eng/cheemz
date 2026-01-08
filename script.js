@@ -14,7 +14,7 @@ const gameState = {
     isPlaying: false,
     isSprinting: false,
     isAiming: false,
-    zombiesInWave: 5,
+    zombiesInWave: 20,
     zombiesSpawned: 0,
     zombiesKilled: 0
 };
@@ -1252,7 +1252,7 @@ function showWaveBanner() {
 }
 
 function startWave() {
-    gameState.zombiesInWave = 5 + gameState.wave * 3;
+    gameState.zombiesInWave = (5 + gameState.wave * 3) * 4;
     gameState.zombiesSpawned = 0;
     gameState.zombiesKilled = 0;
     updateHUD();
@@ -1321,7 +1321,7 @@ function resetGame() {
     gameState.ammo = 30;
     gameState.reserveAmmo = Infinity;
     gameState.isReloading = false;
-    gameState.zombiesInWave = 5;
+    gameState.zombiesInWave = 20;
     gameState.zombiesSpawned = 0;
     gameState.zombiesKilled = 0;
     gameState.damageFlash = 0;
