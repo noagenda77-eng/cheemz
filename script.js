@@ -11,6 +11,8 @@ const gameState = {
     maxAmmo: 30,
     reserveAmmo: Infinity,
     isReloading: false,
+    reloadStartTime: 0,
+    reloadDuration: 2000,
     isPlaying: false,
     isSprinting: false,
     isAiming: false,
@@ -55,6 +57,7 @@ let gunshotAudio = null;
 let waveAudio = null;
 let hurtAudio = null;
 const gunBasePosition = new THREE.Vector3();
+const gunBaseRotation = new THREE.Euler();
 const gunAimPosition = new THREE.Vector3(0.22, -0.28, -0.35);
 const BASE_FOV = 75;
 const AIM_FOV = 25;
@@ -264,6 +267,7 @@ function setupGunModel() {
     gunModel.position.set(0.32, -0.34, -0.55);
     gunModel.rotation.set(-0.02, 0.03, 0.03);
     gunBasePosition.copy(gunModel.position);
+    gunBaseRotation.copy(gunModel.rotation);
 
     weaponRig.add(gunModel);
 }
@@ -971,6 +975,23 @@ function updateZombies(delta) {
             zombie.userData.stuckAvoidDirection = null;
         }
 
+        const separation = new THREE.Vector3();
+        const separationRadius = (zombie.userData.collisionRadius ?? 0.7) * 2.2;
+        zombies.forEach((other) => {
+            if (other === zombie) return;
+            const offset = zombie.position.clone().sub(other.position);
+            offset.y = 0;
+            const distance = offset.length();
+            if (distance > 0.0001 && distance < separationRadius) {
+                separation.add(offset.normalize().multiplyScalar((separationRadius - distance) / separationRadius));
+            }
+        });
+        if (separation.lengthSq() > 0.0001) {
+            const separationDesired = separation.normalize().multiplyScalar(maxSpeed);
+            const separationSteering = separationDesired.sub(zombie.userData.velocity).clampLength(0, maxForce * 0.9);
+            steering.add(separationSteering);
+        }
+
         zombie.userData.velocity.add(steering.multiplyScalar(frameScale));
         if (zombie.userData.velocity.length() > maxSpeed) {
             zombie.userData.velocity.setLength(maxSpeed);
@@ -1280,6 +1301,7 @@ function reload() {
     if (gameState.isReloading || gameState.ammo === gameState.maxAmmo) return;
 
     gameState.isReloading = true;
+    gameState.reloadStartTime = performance.now();
     document.getElementById('reload-indicator').style.opacity = '1';
 
     setTimeout(() => {
@@ -1289,7 +1311,7 @@ function reload() {
 
         document.getElementById('reload-indicator').style.opacity = '0';
         updateAmmoDisplay();
-    }, 2000);
+    }, gameState.reloadDuration);
 }
 
 function takeDamage(amount) {
@@ -1321,6 +1343,7 @@ function resetGame() {
     gameState.ammo = 30;
     gameState.reserveAmmo = Infinity;
     gameState.isReloading = false;
+    gameState.reloadStartTime = 0;
     gameState.zombiesInWave = 20;
     gameState.zombiesSpawned = 0;
     gameState.zombiesKilled = 0;
@@ -1536,6 +1559,18 @@ function animate() {
         if (gunModel) {
             const targetGunPosition = gameState.isAiming ? gunAimPosition : gunBasePosition;
             gunModel.position.lerp(targetGunPosition, 0.18);
+            if (gameState.isReloading) {
+                const elapsed = performance.now() - gameState.reloadStartTime;
+                const progress = Math.min(1, Math.max(0, elapsed / gameState.reloadDuration));
+                const swing = Math.sin(progress * Math.PI);
+                gunModel.rotation.x = gunBaseRotation.x + 0.35 * swing;
+                gunModel.rotation.y = gunBaseRotation.y + 0.15 * swing;
+                gunModel.rotation.z = gunBaseRotation.z - 0.6 * swing;
+                gunModel.position.y -= 0.08 * swing;
+                gunModel.position.z -= 0.04 * swing;
+            } else {
+                gunModel.rotation.copy(gunBaseRotation);
+            }
         }
 
         if (gameState.health < gameState.maxHealth) {
