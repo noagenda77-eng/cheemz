@@ -1566,7 +1566,7 @@ function animate() {
                 if (progress <= 0.6) {
                     swing = Math.sin((progress / 0.6) * (Math.PI / 2));
                 } else {
-                    const snapProgress = (progress - 0.6) / 0.4;
+                    const snapProgress = Math.min(1, ((progress - 0.6) / 0.4) * 3);
                     swing = 1 - Math.pow(snapProgress, 2);
                 }
                 gunModel.rotation.x = gunBaseRotation.x + 0.35 * swing;
