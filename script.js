@@ -860,6 +860,7 @@ function spawnZombie() {
         minRange: 0,
         collisionRadius: 0.1,
         attackCooldown: 0,
+        maxForce: 0.018 + gameState.wave * 0.002,
         hitMeshes,
         lastPosition: zombie.position.clone(),
         lastMoveTime: performance.now()
@@ -893,10 +894,15 @@ function findZombieRoot(object) {
     return null;
 }
 
-function updateZombies() {
+function updateZombies(delta) {
     const now = performance.now();
+    const frameScale = delta * 60;
     zombies.forEach((zombie) => {
         if (!zombie.userData) return;
+
+        if (!zombie.userData.velocity) {
+            zombie.userData.velocity = new THREE.Vector3();
+        }
 
         // Move towards player
         const toPlayer = new THREE.Vector3();
@@ -905,15 +911,14 @@ function updateZombies() {
         const horizontalDistance = Math.hypot(toPlayer.x, toPlayer.z);
         const direction = getZombieMoveDirection(zombie);
 
-        // Face player
-        zombie.lookAt(player.position.x, zombie.position.y, player.position.z);
-
         const stopRange = zombie.userData.stopRange ?? 1.0;
         const minRange = zombie.userData.minRange ?? 0;
+        const maxSpeed = zombie.userData.speed ?? 0.03;
+        const maxForce = zombie.userData.maxForce ?? maxSpeed * 0.6;
 
+        let desiredVelocity = new THREE.Vector3();
         if (horizontalDistance > stopRange) {
-            const delta = direction.clone().multiplyScalar(zombie.userData.speed);
-            moveWithCollisions(zombie.position, delta, zombie.userData.collisionRadius ?? 0.7);
+            desiredVelocity = direction.clone().multiplyScalar(maxSpeed);
         } else {
             // Attack player
             if (zombie.userData.attackCooldown <= 0) {
@@ -921,10 +926,51 @@ function updateZombies() {
                 zombie.userData.attackCooldown = 60;
             }
             if (horizontalDistance < minRange) {
-                const delta = direction.clone().multiplyScalar(-zombie.userData.speed);
-                moveWithCollisions(zombie.position, delta, zombie.userData.collisionRadius ?? 0.7);
+                desiredVelocity = direction.clone().multiplyScalar(-maxSpeed * 0.5);
             }
         }
+
+        const arrivalRadius = 6;
+        if (horizontalDistance < arrivalRadius && horizontalDistance > stopRange) {
+            const rampedSpeed = maxSpeed * (horizontalDistance / arrivalRadius);
+            desiredVelocity = direction.clone().multiplyScalar(rampedSpeed);
+        }
+
+        let steering = desiredVelocity.sub(zombie.userData.velocity).clampLength(0, maxForce);
+
+        const forward = zombie.userData.velocity.lengthSq() > 0.0001
+            ? zombie.userData.velocity.clone().normalize()
+            : direction.clone().normalize();
+        const lookAhead = 3 + maxSpeed * 25;
+        navigationRaycaster.set(zombie.position.clone().add(new THREE.Vector3(0, 1, 0)), forward);
+        navigationRaycaster.far = lookAhead;
+        const obstacleHits = navigationRaycaster.intersectObjects(collisionObjects, true);
+        if (obstacleHits.length > 0) {
+            const hit = obstacleHits[0];
+            const normal = hit.face
+                ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld)
+                : new THREE.Vector3();
+            normal.y = 0;
+            if (normal.lengthSq() > 0.0001) {
+                const avoidDesired = normal.normalize().multiplyScalar(maxSpeed);
+                steering = avoidDesired.sub(zombie.userData.velocity).clampLength(0, maxForce * 1.25);
+            }
+        }
+
+        zombie.userData.velocity.add(steering.multiplyScalar(frameScale));
+        if (zombie.userData.velocity.length() > maxSpeed) {
+            zombie.userData.velocity.setLength(maxSpeed);
+        }
+
+        const moveDelta = zombie.userData.velocity.clone().multiplyScalar(frameScale);
+        const previousPosition = zombie.position.clone();
+        moveWithCollisions(zombie.position, moveDelta, zombie.userData.collisionRadius ?? 0.7);
+        if (zombie.position.distanceToSquared(previousPosition) < 0.000001) {
+            zombie.userData.velocity.set(0, 0, 0);
+        }
+
+        // Face player
+        zombie.lookAt(player.position.x, zombie.position.y, player.position.z);
 
         if (zombie.userData.attackCooldown > 0) {
             zombie.userData.attackCooldown--;
@@ -943,6 +989,7 @@ function updateZombies() {
                 zombie.userData.lastPosition.copy(zombie.position);
                 zombie.userData.lastMoveTime = now;
                 zombie.userData.attackCooldown = 0;
+                zombie.userData.velocity.set(0, 0, 0);
             }
         }
     });
@@ -1448,7 +1495,7 @@ function animate() {
 
     if (gameState.isPlaying) {
         updatePlayer();
-        updateZombies();
+        updateZombies(delta);
         zombies.forEach((zombie) => {
             if (zombie.userData?.mixer) {
                 zombie.userData.mixer.update(delta);
