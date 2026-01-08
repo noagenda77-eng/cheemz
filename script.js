@@ -51,6 +51,7 @@ let gunModel = null;
 let weaponRig = null;
 let muzzleMesh = null;
 let gunshotAudio = null;
+let waveAudio = null;
 const gunBasePosition = new THREE.Vector3();
 const gunAimPosition = new THREE.Vector3(0.22, -0.28, -0.35);
 const BASE_FOV = 75;
@@ -268,12 +269,20 @@ function setupGunModel() {
 function setupAudio() {
     gunshotAudio = new Audio('assets/gunshot.mp3');
     gunshotAudio.volume = 0.5;
+    waveAudio = new Audio('assets/wave.mp3');
+    waveAudio.volume = 0.6;
 }
 
 function playGunshot() {
     if (!gunshotAudio) return;
     gunshotAudio.currentTime = 0;
     gunshotAudio.play().catch(() => {});
+}
+
+function playWaveSound() {
+    if (!waveAudio) return;
+    waveAudio.currentTime = 0;
+    waveAudio.play().catch(() => {});
 }
 
 function updateMuzzleFlashPosition() {
@@ -919,7 +928,7 @@ function updateZombies() {
             if (movementDistance > 0.05) {
                 zombie.userData.lastPosition.copy(zombie.position);
                 zombie.userData.lastMoveTime = now;
-            } else if (now - zombie.userData.lastMoveTime > 30000) {
+            } else if (now - zombie.userData.lastMoveTime > 7000) {
                 zombie.position.copy(getZombieSpawnPosition(0.5));
                 zombie.userData.lastPosition.copy(zombie.position);
                 zombie.userData.lastMoveTime = now;
@@ -1131,6 +1140,7 @@ function nextWave() {
     gameState.zombiesKilled = 0;
 
     updateHUD();
+    playWaveSound();
 
     // Wave announcement effect
     const waveNumber = document.getElementById('wave-number');
