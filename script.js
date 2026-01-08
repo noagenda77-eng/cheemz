@@ -2,7 +2,7 @@
 const gameState = {
     health: 100,
     maxHealth: 100,
-    regenRate: 1,
+    regenRate: 2,
     damageFlash: 0,
     score: 0,
     kills: 0,
@@ -13,6 +13,7 @@ const gameState = {
     isReloading: false,
     isPlaying: false,
     isSprinting: false,
+    isAiming: false,
     zombiesInWave: 5,
     zombiesSpawned: 0,
     zombiesKilled: 0
@@ -25,7 +26,10 @@ const player = {
     rotation: { x: 0, y: 0 },
     speed: 0.15,
     sprintSpeed: 0.25,
-    collisionRadius: 0.6
+    collisionRadius: 0.4,
+    verticalVelocity: 0,
+    isOnGround: true,
+    jumpQueued: false
 };
 
 // Input state
@@ -37,6 +41,7 @@ let scene, camera, renderer;
 let zombies = [];
 let bullets = [];
 let buildings = [];
+let bulletDecals = [];
 const colliders = [];
 const collisionObjects = [];
 let zombieModel = null;
@@ -47,13 +52,19 @@ let gunModel = null;
 let weaponRig = null;
 let muzzleMesh = null;
 let gunshotAudio = null;
+let waveAudio = null;
+let hurtAudio = null;
 const gunBasePosition = new THREE.Vector3();
+const gunAimPosition = new THREE.Vector3(0.22, -0.28, -0.35);
+const BASE_FOV = 75;
+const AIM_FOV = 25;
 const animationClock = new THREE.Clock();
 const collisionBox = new THREE.Box3();
 const navigationRaycaster = new THREE.Raycaster();
 
 const ZOMBIE_MODEL_URL = 'assets/zombie.glb';
 const ZOMBIE_SCALE = 1.2;
+const GROUND_TEXTURE_URL = 'assets/ground.png';
 
 // Initialize Three.js
 function init() {
@@ -61,7 +72,7 @@ function init() {
     scene.background = new THREE.Color(0x0a0a15);
     scene.fog = new THREE.FogExp2(0x0a0a15, 0.02);
 
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera = new THREE.PerspectiveCamera(BASE_FOV, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.copy(player.position);
     scene.add(camera);
 
@@ -260,12 +271,28 @@ function setupGunModel() {
 function setupAudio() {
     gunshotAudio = new Audio('assets/gunshot.mp3');
     gunshotAudio.volume = 0.5;
+    waveAudio = new Audio('assets/wave.mp3');
+    waveAudio.volume = 0.6;
+    hurtAudio = new Audio('assets/hurt.mp3');
+    hurtAudio.volume = 0.55;
 }
 
 function playGunshot() {
     if (!gunshotAudio) return;
     gunshotAudio.currentTime = 0;
     gunshotAudio.play().catch(() => {});
+}
+
+function playWaveSound() {
+    if (!waveAudio) return;
+    waveAudio.currentTime = 0;
+    waveAudio.play().catch(() => {});
+}
+
+function playHurtSound() {
+    if (!hurtAudio) return;
+    hurtAudio.currentTime = 0;
+    hurtAudio.play().catch(() => {});
 }
 
 function updateMuzzleFlashPosition() {
@@ -301,10 +328,14 @@ function createEnvironment() {
 
     // Wet street effect
     const streetGeometry = new THREE.PlaneGeometry(15, 100);
+    const streetTexture = new THREE.TextureLoader().load(GROUND_TEXTURE_URL);
+    streetTexture.wrapS = THREE.RepeatWrapping;
+    streetTexture.wrapT = THREE.RepeatWrapping;
+    streetTexture.repeat.set(1.5, 8);
     const streetMaterial = new THREE.MeshStandardMaterial({
-        color: 0x222233,
-        roughness: 0.3,
-        metalness: 0.4
+        map: streetTexture,
+        roughness: 0.5,
+        metalness: 0.2
     });
     const street = new THREE.Mesh(streetGeometry, streetMaterial);
     street.rotation.x = -Math.PI / 2;
@@ -622,6 +653,61 @@ function createLightBeam() {
     scene.add(beam);
 }
 
+function getZombieSpawnPosition(spawnRadius = 0.5) {
+    const minDistance = 18;
+    const maxDistance = 35;
+    const maxAttempts = 40;
+    const boundsLimit = 38;
+
+    const clampToBounds = (position) => {
+        position.x = Math.max(-boundsLimit, Math.min(boundsLimit, position.x));
+        position.z = Math.max(-boundsLimit, Math.min(boundsLimit, position.z));
+        return position;
+    };
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const angle = Math.random() * Math.PI * 2;
+        const distance = minDistance + Math.random() * (maxDistance - minDistance);
+        const candidate = new THREE.Vector3(
+            player.position.x + Math.cos(angle) * distance,
+            0,
+            player.position.z + Math.sin(angle) * distance
+        );
+
+        if (!isPositionBlocked(candidate, spawnRadius)) {
+            return clampToBounds(candidate);
+        }
+    }
+
+    for (let distance = maxDistance; distance >= minDistance; distance -= 2) {
+        for (let step = 0; step < 16; step++) {
+            const angle = (Math.PI * 2 * step) / 16;
+            const candidate = new THREE.Vector3(
+                player.position.x + Math.cos(angle) * distance,
+                0,
+                player.position.z + Math.sin(angle) * distance
+            );
+            if (!isPositionBlocked(candidate, spawnRadius)) {
+                return clampToBounds(candidate);
+            }
+        }
+    }
+
+    for (let step = 0; step < 8; step++) {
+        const angle = (Math.PI * 2 * step) / 8;
+        const fallback = new THREE.Vector3(
+            player.position.x + Math.cos(angle) * maxDistance,
+            0,
+            player.position.z + Math.sin(angle) * maxDistance
+        );
+        if (!isPositionBlocked(fallback, spawnRadius)) {
+            return clampToBounds(fallback);
+        }
+    }
+
+    return clampToBounds(player.position.clone());
+}
+
 function spawnZombie() {
     if (gameState.zombiesSpawned >= gameState.zombiesInWave) return;
 
@@ -749,14 +835,8 @@ function spawnZombie() {
     headHitbox.userData.isHeadshot = true;  // For potential headshot bonus
     zombie.add(headHitbox);
 
-    // Spawn position (random around player)
-    const angle = Math.random() * Math.PI * 2;
-    const distance = 25 + Math.random() * 15;
-    zombie.position.set(
-        player.position.x + Math.cos(angle) * distance,
-        0,
-        player.position.z + Math.sin(angle) * distance
-    );
+    // Spawn position (random around player, avoiding collisions)
+    zombie.position.copy(getZombieSpawnPosition(0.5));
 
     // Collect hitbox meshes for raycasting
     const hitMeshes = [];
@@ -770,13 +850,16 @@ function spawnZombie() {
     zombie.userData = {
         isZombieRoot: true,
         health: 1,
-        speed: 0.03 + gameState.wave * 0.005,
+        speed: 0.03 + gameState.wave * 0.01,
         damage: 20,
         stopRange: 1.0,
         minRange: 0,
-        collisionRadius: 0.7,
+        collisionRadius: 0.1,
         attackCooldown: 0,
-        hitMeshes
+        maxForce: 0.018 + gameState.wave * 0.002,
+        hitMeshes,
+        lastPosition: zombie.position.clone(),
+        lastMoveTime: performance.now()
     };
     if (zombieModel && zombieClips.length > 0) {
         const zombieInstance = zombie.children[0];
@@ -807,9 +890,15 @@ function findZombieRoot(object) {
     return null;
 }
 
-function updateZombies() {
+function updateZombies(delta) {
+    const now = performance.now();
+    const frameScale = delta * 60;
     zombies.forEach((zombie) => {
         if (!zombie.userData) return;
+
+        if (!zombie.userData.velocity) {
+            zombie.userData.velocity = new THREE.Vector3();
+        }
 
         // Move towards player
         const toPlayer = new THREE.Vector3();
@@ -818,15 +907,14 @@ function updateZombies() {
         const horizontalDistance = Math.hypot(toPlayer.x, toPlayer.z);
         const direction = getZombieMoveDirection(zombie);
 
-        // Face player
-        zombie.lookAt(player.position.x, zombie.position.y, player.position.z);
-
         const stopRange = zombie.userData.stopRange ?? 1.0;
         const minRange = zombie.userData.minRange ?? 0;
+        const maxSpeed = zombie.userData.speed ?? 0.03;
+        const maxForce = zombie.userData.maxForce ?? maxSpeed * 0.6;
 
+        let desiredVelocity = new THREE.Vector3();
         if (horizontalDistance > stopRange) {
-            const delta = direction.clone().multiplyScalar(zombie.userData.speed);
-            moveWithCollisions(zombie.position, delta, zombie.userData.collisionRadius ?? 0.7);
+            desiredVelocity = direction.clone().multiplyScalar(maxSpeed);
         } else {
             // Attack player
             if (zombie.userData.attackCooldown <= 0) {
@@ -834,13 +922,71 @@ function updateZombies() {
                 zombie.userData.attackCooldown = 60;
             }
             if (horizontalDistance < minRange) {
-                const delta = direction.clone().multiplyScalar(-zombie.userData.speed);
-                moveWithCollisions(zombie.position, delta, zombie.userData.collisionRadius ?? 0.7);
+                desiredVelocity = direction.clone().multiplyScalar(-maxSpeed * 0.5);
             }
         }
 
+        const arrivalRadius = 6;
+        if (horizontalDistance < arrivalRadius && horizontalDistance > stopRange) {
+            const rampedSpeed = maxSpeed * (horizontalDistance / arrivalRadius);
+            desiredVelocity = direction.clone().multiplyScalar(rampedSpeed);
+        }
+
+        let steering = desiredVelocity.sub(zombie.userData.velocity).clampLength(0, maxForce);
+
+        const forward = zombie.userData.velocity.lengthSq() > 0.0001
+            ? zombie.userData.velocity.clone().normalize()
+            : direction.clone().normalize();
+        const lookAhead = 3 + maxSpeed * 25;
+        navigationRaycaster.set(zombie.position.clone().add(new THREE.Vector3(0, 1, 0)), forward);
+        navigationRaycaster.far = lookAhead;
+        const obstacleHits = navigationRaycaster.intersectObjects(collisionObjects, true);
+        if (obstacleHits.length > 0) {
+            const hit = obstacleHits[0];
+            const normal = hit.face
+                ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld)
+                : new THREE.Vector3();
+            normal.y = 0;
+            if (normal.lengthSq() > 0.0001) {
+                const avoidDesired = normal.normalize().multiplyScalar(maxSpeed);
+                steering = avoidDesired.sub(zombie.userData.velocity).clampLength(0, maxForce * 1.25);
+            }
+        }
+
+        zombie.userData.velocity.add(steering.multiplyScalar(frameScale));
+        if (zombie.userData.velocity.length() > maxSpeed) {
+            zombie.userData.velocity.setLength(maxSpeed);
+        }
+
+        const moveDelta = zombie.userData.velocity.clone().multiplyScalar(frameScale);
+        const previousPosition = zombie.position.clone();
+        moveWithCollisions(zombie.position, moveDelta, zombie.userData.collisionRadius ?? 0.7);
+        if (zombie.position.distanceToSquared(previousPosition) < 0.000001) {
+            zombie.userData.velocity.set(0, 0, 0);
+        }
+
+        // Face player
+        zombie.lookAt(player.position.x, zombie.position.y, player.position.z);
+
         if (zombie.userData.attackCooldown > 0) {
             zombie.userData.attackCooldown--;
+        }
+
+        if (!zombie.userData.lastPosition) {
+            zombie.userData.lastPosition = zombie.position.clone();
+            zombie.userData.lastMoveTime = now;
+        } else {
+            const movementDistance = zombie.position.distanceTo(zombie.userData.lastPosition);
+            if (movementDistance > 0.05) {
+                zombie.userData.lastPosition.copy(zombie.position);
+                zombie.userData.lastMoveTime = now;
+            } else if (now - zombie.userData.lastMoveTime > 7000) {
+                zombie.position.copy(getZombieSpawnPosition(0.5));
+                zombie.userData.lastPosition.copy(zombie.position);
+                zombie.userData.lastMoveTime = now;
+                zombie.userData.attackCooldown = 0;
+                zombie.userData.velocity.set(0, 0, 0);
+            }
         }
     });
 }
@@ -873,10 +1019,16 @@ function shoot() {
 
     // Check zombie hits using hitbox meshes
     const zombieMeshes = zombies.flatMap((z) => z.userData?.hitMeshes ?? []);
-    const intersects = raycaster.intersectObjects(zombieMeshes, false);
+    const zombieIntersects = raycaster.intersectObjects(zombieMeshes, false);
+    const environmentIntersects = raycaster.intersectObjects(collisionObjects, true);
 
-    if (intersects.length > 0) {
-        const hitObject = intersects[0].object;
+    const nearestZombieHit = zombieIntersects[0];
+    const nearestEnvironmentHit = environmentIntersects[0];
+
+    if (nearestEnvironmentHit && (!nearestZombieHit || nearestEnvironmentHit.distance <= nearestZombieHit.distance)) {
+        createBulletDecal(nearestEnvironmentHit.point, nearestEnvironmentHit.face?.normal);
+    } else if (nearestZombieHit) {
+        const hitObject = nearestZombieHit.object;
         const zombie = hitObject.userData.zombieRoot ?? findZombieRoot(hitObject);
 
         if (zombie?.userData) {
@@ -888,7 +1040,7 @@ function shoot() {
             showHitMarker();
 
             // Blood effect at hit point
-            createBloodEffect(intersects[0].point);
+            createBloodEffect(nearestZombieHit.point);
 
             if (zombie.userData.health <= 0) {
                 killZombie(zombie);
@@ -923,6 +1075,34 @@ function createBulletTracer(raycaster) {
         tracerMaterial.opacity = 0.15;
     }, 40);
     setTimeout(() => scene.remove(tracer), 90);
+}
+
+function createBulletDecal(position, normal) {
+    if (!position) return;
+    const decalSize = 0.35;
+    const decalGeometry = new THREE.PlaneGeometry(decalSize, decalSize);
+    const decalMaterial = new THREE.MeshBasicMaterial({
+        color: 0x222222,
+        transparent: true,
+        opacity: 0.85
+    });
+    const decal = new THREE.Mesh(decalGeometry, decalMaterial);
+    decal.position.copy(position);
+    if (normal) {
+        const target = normal.clone().normalize();
+        decal.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), target);
+        decal.position.add(target.multiplyScalar(0.02));
+    }
+    scene.add(decal);
+    bulletDecals.push(decal);
+    if (bulletDecals.length > 10) {
+        const oldest = bulletDecals.shift();
+        if (oldest) {
+            scene.remove(oldest);
+            oldest.geometry.dispose();
+            oldest.material.dispose();
+        }
+    }
 }
 
 function createBloodEffect(position) {
@@ -1041,12 +1221,26 @@ function addKillNotification() {
 }
 
 function nextWave() {
-    gameState.wave++;
+    scheduleWaveStart(gameState.wave + 1, 5);
+}
+
+function showWaveBanner() {
+    const waveBanner = document.getElementById('wave-banner');
+    if (!waveBanner) return;
+    waveBanner.textContent = `WAVE ${gameState.wave}`;
+    waveBanner.classList.remove('show');
+    void waveBanner.offsetWidth;
+    waveBanner.classList.add('show');
+}
+
+function startWave() {
     gameState.zombiesInWave = 5 + gameState.wave * 3;
     gameState.zombiesSpawned = 0;
     gameState.zombiesKilled = 0;
-
     updateHUD();
+    playWaveSound();
+    showWaveBanner();
+    spawnTimer = 0;
 
     // Wave announcement effect
     const waveNumber = document.getElementById('wave-number');
@@ -1055,6 +1249,13 @@ function nextWave() {
     setTimeout(() => {
         waveNumber.style.transform = 'scale(1)';
     }, 300);
+}
+
+function scheduleWaveStart(waveNumber, delaySeconds) {
+    wavePending = true;
+    waveDelayTimer = delaySeconds;
+    pendingWaveNumber = waveNumber;
+    spawnTimer = 0;
 }
 
 function reload() {
@@ -1076,6 +1277,7 @@ function reload() {
 function takeDamage(amount) {
     gameState.health = Math.max(0, gameState.health - amount);
     gameState.damageFlash = Math.min(1, gameState.damageFlash + 0.6);
+    playHurtSound();
 
     updateHealthDisplay();
 
@@ -1143,6 +1345,7 @@ function setupEventListeners() {
         document.getElementById('start-screen').style.display = 'none';
         gameState.isPlaying = true;
         document.body.requestPointerLock();
+        scheduleWaveStart(gameState.wave, 1);
     });
 
     // Restart game
@@ -1151,6 +1354,7 @@ function setupEventListeners() {
         resetGame();
         gameState.isPlaying = true;
         document.body.requestPointerLock();
+        scheduleWaveStart(gameState.wave, 1);
     });
 
     // Mouse look
@@ -1167,7 +1371,18 @@ function setupEventListeners() {
         if (e.button === 0 && gameState.isPlaying && document.pointerLockElement) {
             shoot();
         }
+        if (e.button === 2 && gameState.isPlaying) {
+            gameState.isAiming = true;
+        }
     });
+
+    document.addEventListener('mouseup', (e) => {
+        if (e.button === 2) {
+            gameState.isAiming = false;
+        }
+    });
+
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
 
     // Keyboard
     document.addEventListener('keydown', (e) => {
@@ -1178,6 +1393,9 @@ function setupEventListeners() {
         }
         if (e.code === 'ShiftLeft') {
             gameState.isSprinting = true;
+        }
+        if (e.code === 'Space' && gameState.isPlaying && !player.jumpQueued) {
+            player.jumpQueued = true;
         }
     });
 
@@ -1208,6 +1426,9 @@ function updatePlayer() {
     if (!gameState.isPlaying) return;
 
     const speed = gameState.isSprinting ? player.sprintSpeed : player.speed;
+    const groundY = 2;
+    const gravity = 0.012;
+    const jumpStrength = 0.22;
 
     // Movement
     const forward = new THREE.Vector3();
@@ -1230,6 +1451,24 @@ function updatePlayer() {
         moveWithCollisions(player.position, move, player.collisionRadius);
     }
 
+    if (player.jumpQueued && player.isOnGround) {
+        player.verticalVelocity = jumpStrength;
+        player.isOnGround = false;
+        player.jumpQueued = false;
+    } else if (player.jumpQueued && !player.isOnGround) {
+        player.jumpQueued = false;
+    }
+
+    if (!player.isOnGround) {
+        player.verticalVelocity -= gravity;
+        player.position.y += player.verticalVelocity;
+        if (player.position.y <= groundY) {
+            player.position.y = groundY;
+            player.verticalVelocity = 0;
+            player.isOnGround = true;
+        }
+    }
+
     // Boundary check
     player.position.x = Math.max(-40, Math.min(40, player.position.x));
     player.position.z = Math.max(-40, Math.min(40, player.position.z));
@@ -1242,6 +1481,9 @@ function updatePlayer() {
 }
 
 let spawnTimer = 0;
+let waveDelayTimer = 0;
+let wavePending = false;
+let pendingWaveNumber = null;
 
 function animate() {
     requestAnimationFrame(animate);
@@ -1249,12 +1491,34 @@ function animate() {
 
     if (gameState.isPlaying) {
         updatePlayer();
-        updateZombies();
+        updateZombies(delta);
         zombies.forEach((zombie) => {
             if (zombie.userData?.mixer) {
                 zombie.userData.mixer.update(delta);
             }
         });
+
+        if (wavePending) {
+            waveDelayTimer = Math.max(0, waveDelayTimer - delta);
+            if (waveDelayTimer <= 0) {
+                wavePending = false;
+                if (pendingWaveNumber !== null) {
+                    gameState.wave = pendingWaveNumber;
+                    pendingWaveNumber = null;
+                }
+                startWave();
+            }
+        }
+
+        const targetFov = gameState.isAiming ? AIM_FOV : BASE_FOV;
+        if (Math.abs(camera.fov - targetFov) > 0.01) {
+            camera.fov += (targetFov - camera.fov) * 0.12;
+            camera.updateProjectionMatrix();
+        }
+        if (gunModel) {
+            const targetGunPosition = gameState.isAiming ? gunAimPosition : gunBasePosition;
+            gunModel.position.lerp(targetGunPosition, 0.18);
+        }
 
         if (gameState.health < gameState.maxHealth) {
             gameState.health = Math.min(
@@ -1267,14 +1531,18 @@ function animate() {
         }
         const overlay = document.getElementById('damage-overlay');
         const healthRatio = gameState.health / gameState.maxHealth;
-        const baseTint = Math.pow(1 - healthRatio, 0.7) * 0.85;
-        const flashTint = gameState.damageFlash * 0.45;
-        overlay.style.opacity = Math.min(0.95, baseTint + flashTint).toFixed(3);
+        const baseTint = Math.pow(1 - healthRatio, 0.55) * 1.3;
+        const flashTint = gameState.damageFlash * 0.75;
+        const redIntensity = Math.min(1, 0.35 + (1 - healthRatio) * 0.65 + gameState.damageFlash * 0.2);
+        overlay.style.setProperty('--damage-red', redIntensity.toFixed(3));
+        overlay.style.opacity = Math.min(1, baseTint + flashTint).toFixed(3);
         updateHealthDisplay();
 
         // Spawn zombies periodically
-        spawnTimer++;
-        if (spawnTimer >= 120 && gameState.zombiesSpawned < gameState.zombiesInWave) {
+        if (!wavePending) {
+            spawnTimer++;
+        }
+        if (!wavePending && spawnTimer >= 120 && gameState.zombiesSpawned < gameState.zombiesInWave) {
             spawnZombie();
             spawnTimer = 0;
         }
