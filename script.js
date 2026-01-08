@@ -1562,7 +1562,13 @@ function animate() {
             if (gameState.isReloading) {
                 const elapsed = performance.now() - gameState.reloadStartTime;
                 const progress = Math.min(1, Math.max(0, elapsed / gameState.reloadDuration));
-                const swing = Math.sin(progress * Math.PI);
+                let swing;
+                if (progress <= 0.6) {
+                    swing = Math.sin((progress / 0.6) * (Math.PI / 2));
+                } else {
+                    const snapProgress = (progress - 0.6) / 0.4;
+                    swing = 1 - Math.pow(snapProgress, 2);
+                }
                 gunModel.rotation.x = gunBaseRotation.x + 0.35 * swing;
                 gunModel.rotation.y = gunBaseRotation.y + 0.15 * swing;
                 gunModel.rotation.z = gunBaseRotation.z - 0.6 * swing;
