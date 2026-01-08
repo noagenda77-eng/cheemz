@@ -946,6 +946,31 @@ function updateZombies(delta) {
             zombie.userData.avoidSide = null;
         }
 
+        if (!zombie.userData.stuckAvoidUntil) {
+            zombie.userData.stuckAvoidUntil = 0;
+        }
+        const isStalled = zombie.userData.velocity.length() < maxSpeed * 0.5 && desiredVelocity.lengthSq() > 0.0001;
+        if (isStalled && zombie.userData.stuckAvoidUntil <= now) {
+            const baseDirection = toPlayerDirection.lengthSq() > 0.0001 ? toPlayerDirection : direction;
+            const rotateLeft = Math.random() < 0.5 ? -1 : 1;
+            const angle = THREE.MathUtils.degToRad(110) * rotateLeft;
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            zombie.userData.stuckAvoidDirection = new THREE.Vector3(
+                baseDirection.x * cos - baseDirection.z * sin,
+                0,
+                baseDirection.x * sin + baseDirection.z * cos
+            ).normalize();
+            zombie.userData.stuckAvoidUntil = now + 1000;
+        }
+
+        if (zombie.userData.stuckAvoidUntil > now && zombie.userData.stuckAvoidDirection) {
+            const stuckDesired = zombie.userData.stuckAvoidDirection.clone().multiplyScalar(maxSpeed);
+            steering = stuckDesired.sub(zombie.userData.velocity).clampLength(0, maxForce * 1.6);
+        } else if (zombie.userData.stuckAvoidUntil <= now) {
+            zombie.userData.stuckAvoidDirection = null;
+        }
+
         zombie.userData.velocity.add(steering.multiplyScalar(frameScale));
         if (zombie.userData.velocity.length() > maxSpeed) {
             zombie.userData.velocity.setLength(maxSpeed);
