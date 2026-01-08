@@ -53,6 +53,7 @@ let weaponRig = null;
 let muzzleMesh = null;
 let gunshotAudio = null;
 let waveAudio = null;
+let hurtAudio = null;
 const gunBasePosition = new THREE.Vector3();
 const gunAimPosition = new THREE.Vector3(0.22, -0.28, -0.35);
 const BASE_FOV = 75;
@@ -272,6 +273,8 @@ function setupAudio() {
     gunshotAudio.volume = 0.5;
     waveAudio = new Audio('assets/wave.mp3');
     waveAudio.volume = 0.6;
+    hurtAudio = new Audio('assets/hurt.mp3');
+    hurtAudio.volume = 0.55;
 }
 
 function playGunshot() {
@@ -284,6 +287,12 @@ function playWaveSound() {
     if (!waveAudio) return;
     waveAudio.currentTime = 0;
     waveAudio.play().catch(() => {});
+}
+
+function playHurtSound() {
+    if (!hurtAudio) return;
+    hurtAudio.currentTime = 0;
+    hurtAudio.play().catch(() => {});
 }
 
 function updateMuzzleFlashPosition() {
@@ -1225,6 +1234,7 @@ function reload() {
 function takeDamage(amount) {
     gameState.health = Math.max(0, gameState.health - amount);
     gameState.damageFlash = Math.min(1, gameState.damageFlash + 0.6);
+    playHurtSound();
 
     updateHealthDisplay();
 
