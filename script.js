@@ -844,7 +844,7 @@ function spawnZombie() {
     zombie.userData = {
         isZombieRoot: true,
         health: 1,
-        speed: 0.03 + gameState.wave * 0.005,
+        speed: 0.03 + gameState.wave * 0.01,
         damage: 20,
         stopRange: 1.0,
         minRange: 0,
@@ -1134,7 +1134,7 @@ function addKillNotification() {
 }
 
 function nextWave() {
-    scheduleWaveStart(gameState.wave + 1);
+    scheduleWaveStart(gameState.wave + 1, 5);
 }
 
 function showWaveBanner() {
@@ -1164,9 +1164,9 @@ function startWave() {
     }, 300);
 }
 
-function scheduleWaveStart(waveNumber) {
+function scheduleWaveStart(waveNumber, delaySeconds) {
     wavePending = true;
-    waveDelayTimer = 5;
+    waveDelayTimer = delaySeconds;
     pendingWaveNumber = waveNumber;
     spawnTimer = 0;
 }
@@ -1257,7 +1257,7 @@ function setupEventListeners() {
         document.getElementById('start-screen').style.display = 'none';
         gameState.isPlaying = true;
         document.body.requestPointerLock();
-        scheduleWaveStart(gameState.wave);
+        scheduleWaveStart(gameState.wave, 1);
     });
 
     // Restart game
@@ -1266,7 +1266,7 @@ function setupEventListeners() {
         resetGame();
         gameState.isPlaying = true;
         document.body.requestPointerLock();
-        scheduleWaveStart(gameState.wave);
+        scheduleWaveStart(gameState.wave, 1);
     });
 
     // Mouse look
