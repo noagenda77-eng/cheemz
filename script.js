@@ -841,7 +841,9 @@ function spawnZombie() {
         minRange: 0,
         collisionRadius: 0.5,
         attackCooldown: 0,
-        hitMeshes
+        hitMeshes,
+        lastPosition: zombie.position.clone(),
+        lastMoveTime: performance.now()
     };
     if (zombieModel && zombieClips.length > 0) {
         const zombieInstance = zombie.children[0];
@@ -873,6 +875,7 @@ function findZombieRoot(object) {
 }
 
 function updateZombies() {
+    const now = performance.now();
     zombies.forEach((zombie) => {
         if (!zombie.userData) return;
 
@@ -906,6 +909,22 @@ function updateZombies() {
 
         if (zombie.userData.attackCooldown > 0) {
             zombie.userData.attackCooldown--;
+        }
+
+        if (!zombie.userData.lastPosition) {
+            zombie.userData.lastPosition = zombie.position.clone();
+            zombie.userData.lastMoveTime = now;
+        } else {
+            const movementDistance = zombie.position.distanceTo(zombie.userData.lastPosition);
+            if (movementDistance > 0.05) {
+                zombie.userData.lastPosition.copy(zombie.position);
+                zombie.userData.lastMoveTime = now;
+            } else if (now - zombie.userData.lastMoveTime > 30000) {
+                zombie.position.copy(getZombieSpawnPosition(0.5));
+                zombie.userData.lastPosition.copy(zombie.position);
+                zombie.userData.lastMoveTime = now;
+                zombie.userData.attackCooldown = 0;
+            }
         }
     });
 }
