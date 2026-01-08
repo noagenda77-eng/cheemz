@@ -1134,21 +1134,7 @@ function addKillNotification() {
 }
 
 function nextWave() {
-    gameState.wave++;
-    gameState.zombiesInWave = 5 + gameState.wave * 3;
-    gameState.zombiesSpawned = 0;
-    gameState.zombiesKilled = 0;
-
-    updateHUD();
-    scheduleWaveStart();
-
-    // Wave announcement effect
-    const waveNumber = document.getElementById('wave-number');
-    waveNumber.style.transform = 'scale(1.5)';
-    waveNumber.style.transition = 'transform 0.3s ease';
-    setTimeout(() => {
-        waveNumber.style.transform = 'scale(1)';
-    }, 300);
+    scheduleWaveStart(gameState.wave + 1);
 }
 
 function showWaveBanner() {
@@ -1160,12 +1146,29 @@ function showWaveBanner() {
     waveBanner.classList.add('show');
 }
 
-function scheduleWaveStart() {
-    wavePending = true;
-    waveDelayTimer = 5;
-    spawnTimer = 0;
+function startWave() {
+    gameState.zombiesInWave = 5 + gameState.wave * 3;
+    gameState.zombiesSpawned = 0;
+    gameState.zombiesKilled = 0;
+    updateHUD();
     playWaveSound();
     showWaveBanner();
+    spawnTimer = 0;
+
+    // Wave announcement effect
+    const waveNumber = document.getElementById('wave-number');
+    waveNumber.style.transform = 'scale(1.5)';
+    waveNumber.style.transition = 'transform 0.3s ease';
+    setTimeout(() => {
+        waveNumber.style.transform = 'scale(1)';
+    }, 300);
+}
+
+function scheduleWaveStart(waveNumber) {
+    wavePending = true;
+    waveDelayTimer = 5;
+    pendingWaveNumber = waveNumber;
+    spawnTimer = 0;
 }
 
 function reload() {
@@ -1254,7 +1257,7 @@ function setupEventListeners() {
         document.getElementById('start-screen').style.display = 'none';
         gameState.isPlaying = true;
         document.body.requestPointerLock();
-        scheduleWaveStart();
+        scheduleWaveStart(gameState.wave);
     });
 
     // Restart game
@@ -1263,7 +1266,7 @@ function setupEventListeners() {
         resetGame();
         gameState.isPlaying = true;
         document.body.requestPointerLock();
-        scheduleWaveStart();
+        scheduleWaveStart(gameState.wave);
     });
 
     // Mouse look
@@ -1392,6 +1395,7 @@ function updatePlayer() {
 let spawnTimer = 0;
 let waveDelayTimer = 0;
 let wavePending = false;
+let pendingWaveNumber = null;
 
 function animate() {
     requestAnimationFrame(animate);
@@ -1410,7 +1414,11 @@ function animate() {
             waveDelayTimer = Math.max(0, waveDelayTimer - delta);
             if (waveDelayTimer <= 0) {
                 wavePending = false;
-                spawnTimer = 0;
+                if (pendingWaveNumber !== null) {
+                    gameState.wave = pendingWaveNumber;
+                    pendingWaveNumber = null;
+                }
+                startWave();
             }
         }
 
