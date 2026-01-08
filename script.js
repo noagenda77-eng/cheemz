@@ -41,6 +41,7 @@ let scene, camera, renderer;
 let zombies = [];
 let bullets = [];
 let buildings = [];
+let bulletDecals = [];
 const colliders = [];
 const collisionObjects = [];
 let zombieModel = null;
@@ -848,7 +849,7 @@ function spawnZombie() {
         damage: 20,
         stopRange: 1.0,
         minRange: 0,
-        collisionRadius: 0.5,
+        collisionRadius: 0.1,
         attackCooldown: 0,
         hitMeshes,
         lastPosition: zombie.position.clone(),
@@ -966,10 +967,16 @@ function shoot() {
 
     // Check zombie hits using hitbox meshes
     const zombieMeshes = zombies.flatMap((z) => z.userData?.hitMeshes ?? []);
-    const intersects = raycaster.intersectObjects(zombieMeshes, false);
+    const zombieIntersects = raycaster.intersectObjects(zombieMeshes, false);
+    const environmentIntersects = raycaster.intersectObjects(collisionObjects, true);
 
-    if (intersects.length > 0) {
-        const hitObject = intersects[0].object;
+    const nearestZombieHit = zombieIntersects[0];
+    const nearestEnvironmentHit = environmentIntersects[0];
+
+    if (nearestEnvironmentHit && (!nearestZombieHit || nearestEnvironmentHit.distance <= nearestZombieHit.distance)) {
+        createBulletDecal(nearestEnvironmentHit.point, nearestEnvironmentHit.face?.normal);
+    } else if (nearestZombieHit) {
+        const hitObject = nearestZombieHit.object;
         const zombie = hitObject.userData.zombieRoot ?? findZombieRoot(hitObject);
 
         if (zombie?.userData) {
@@ -981,7 +988,7 @@ function shoot() {
             showHitMarker();
 
             // Blood effect at hit point
-            createBloodEffect(intersects[0].point);
+            createBloodEffect(nearestZombieHit.point);
 
             if (zombie.userData.health <= 0) {
                 killZombie(zombie);
@@ -1016,6 +1023,34 @@ function createBulletTracer(raycaster) {
         tracerMaterial.opacity = 0.15;
     }, 40);
     setTimeout(() => scene.remove(tracer), 90);
+}
+
+function createBulletDecal(position, normal) {
+    if (!position) return;
+    const decalSize = 0.35;
+    const decalGeometry = new THREE.PlaneGeometry(decalSize, decalSize);
+    const decalMaterial = new THREE.MeshBasicMaterial({
+        color: 0x222222,
+        transparent: true,
+        opacity: 0.85
+    });
+    const decal = new THREE.Mesh(decalGeometry, decalMaterial);
+    decal.position.copy(position);
+    if (normal) {
+        const target = normal.clone().normalize();
+        decal.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), target);
+        decal.position.add(target.multiplyScalar(0.02));
+    }
+    scene.add(decal);
+    bulletDecals.push(decal);
+    if (bulletDecals.length > 10) {
+        const oldest = bulletDecals.shift();
+        if (oldest) {
+            scene.remove(oldest);
+            oldest.geometry.dispose();
+            oldest.material.dispose();
+        }
+    }
 }
 
 function createBloodEffect(position) {
