@@ -416,19 +416,6 @@ function getZombieMoveDirection(zombie) {
     }
     direction.normalize();
 
-    const origin = zombie.position.clone();
-    origin.y += 1;
-    navigationRaycaster.set(origin, direction);
-    navigationRaycaster.far = distance;
-    const hits = navigationRaycaster.intersectObjects(collisionObjects, true);
-    if (hits.length > 0 && hits[0].distance < distance) {
-        const left = new THREE.Vector3(-direction.z, 0, direction.x);
-        const right = new THREE.Vector3(direction.z, 0, -direction.x);
-        const leftClear = getClearDistance(origin, left);
-        const rightClear = getClearDistance(origin, right);
-        return (leftClear >= rightClear ? left : right).normalize();
-    }
-
     return direction;
 }
 
@@ -909,6 +896,7 @@ function updateZombies(delta) {
         toPlayer.subVectors(player.position, zombie.position);
         toPlayer.y = 0;
         const horizontalDistance = Math.hypot(toPlayer.x, toPlayer.z);
+        const toPlayerDirection = horizontalDistance > 0.0001 ? toPlayer.clone().normalize() : new THREE.Vector3();
         const direction = getZombieMoveDirection(zombie);
 
         const stopRange = zombie.userData.stopRange ?? 1.0;
@@ -930,7 +918,7 @@ function updateZombies(delta) {
             }
         }
 
-        const arrivalRadius = 6;
+        const arrivalRadius = 3.5;
         if (horizontalDistance < arrivalRadius && horizontalDistance > stopRange) {
             const rampedSpeed = maxSpeed * (horizontalDistance / arrivalRadius);
             desiredVelocity = direction.clone().multiplyScalar(rampedSpeed);
@@ -938,23 +926,49 @@ function updateZombies(delta) {
 
         let steering = desiredVelocity.sub(zombie.userData.velocity).clampLength(0, maxForce);
 
-        const forward = zombie.userData.velocity.lengthSq() > 0.0001
-            ? zombie.userData.velocity.clone().normalize()
-            : direction.clone().normalize();
+        const origin = zombie.position.clone().add(new THREE.Vector3(0, 1, 0));
         const lookAhead = 3 + maxSpeed * 25;
-        navigationRaycaster.set(zombie.position.clone().add(new THREE.Vector3(0, 1, 0)), forward);
-        navigationRaycaster.far = lookAhead;
-        const obstacleHits = navigationRaycaster.intersectObjects(collisionObjects, true);
-        if (obstacleHits.length > 0) {
-            const hit = obstacleHits[0];
-            const normal = hit.face
-                ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld)
-                : new THREE.Vector3();
-            normal.y = 0;
-            if (normal.lengthSq() > 0.0001) {
-                const avoidDesired = normal.normalize().multiplyScalar(maxSpeed);
-                steering = avoidDesired.sub(zombie.userData.velocity).clampLength(0, maxForce * 1.25);
+        const pathBlocked = horizontalDistance > 0.1
+            && getClearDistance(origin, toPlayerDirection, horizontalDistance) < horizontalDistance - 0.1;
+        if (pathBlocked) {
+            const left = new THREE.Vector3(-toPlayerDirection.z, 0, toPlayerDirection.x).normalize();
+            const right = new THREE.Vector3(toPlayerDirection.z, 0, -toPlayerDirection.x).normalize();
+            const sideProbeDistance = Math.max(2.5, lookAhead * 0.6);
+            const leftClear = getClearDistance(origin, left, sideProbeDistance);
+            const rightClear = getClearDistance(origin, right, sideProbeDistance);
+            if (!zombie.userData.avoidSide || Math.abs(leftClear - rightClear) > 0.2) {
+                zombie.userData.avoidSide = leftClear >= rightClear ? -1 : 1;
             }
+            const avoidDirection = zombie.userData.avoidSide === -1 ? left : right;
+            const avoidDesired = avoidDirection.multiplyScalar(maxSpeed);
+            steering = avoidDesired.sub(zombie.userData.velocity).clampLength(0, maxForce * 1.4);
+        } else {
+            zombie.userData.avoidSide = null;
+        }
+
+        if (!zombie.userData.stuckAvoidUntil) {
+            zombie.userData.stuckAvoidUntil = 0;
+        }
+        const isStalled = zombie.userData.velocity.length() < maxSpeed * 0.5 && desiredVelocity.lengthSq() > 0.0001;
+        if (isStalled && zombie.userData.stuckAvoidUntil <= now) {
+            const baseDirection = toPlayerDirection.lengthSq() > 0.0001 ? toPlayerDirection : direction;
+            const rotateLeft = Math.random() < 0.5 ? -1 : 1;
+            const angle = THREE.MathUtils.degToRad(110) * rotateLeft;
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            zombie.userData.stuckAvoidDirection = new THREE.Vector3(
+                baseDirection.x * cos - baseDirection.z * sin,
+                0,
+                baseDirection.x * sin + baseDirection.z * cos
+            ).normalize();
+            zombie.userData.stuckAvoidUntil = now + 1000;
+        }
+
+        if (zombie.userData.stuckAvoidUntil > now && zombie.userData.stuckAvoidDirection) {
+            const stuckDesired = zombie.userData.stuckAvoidDirection.clone().multiplyScalar(maxSpeed);
+            steering = stuckDesired.sub(zombie.userData.velocity).clampLength(0, maxForce * 1.6);
+        } else if (zombie.userData.stuckAvoidUntil <= now) {
+            zombie.userData.stuckAvoidDirection = null;
         }
 
         zombie.userData.velocity.add(steering.multiplyScalar(frameScale));
