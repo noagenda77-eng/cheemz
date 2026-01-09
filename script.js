@@ -61,6 +61,8 @@ let waveAudio = null;
 let hurtAudio = null;
 let carsCreated = false;
 let debrisCreated = false;
+let decalTexture = null;
+const propSpawnPoints = [];
 const gunBasePosition = new THREE.Vector3();
 const gunBaseRotation = new THREE.Euler();
 const gunAimPosition = new THREE.Vector3(0.22, -0.28, -0.35);
@@ -74,9 +76,11 @@ const ZOMBIE_MODEL_URL = 'assets/zombie.glb';
 const ZOMBIE_SCALE = 1.2;
 const CAR_MODEL_URL = 'assets/car.glb';
 const CAR_SCALE = 3;
-const CAR_GROUND_OFFSET = 0.1;
+const CAR_GROUND_OFFSET = 0.05;
+const PLAYER_SPAWN_RADIUS = 3;
 const DEBRIS_MODEL_URL = 'assets/debris.glb';
 const DEBRIS_SCALE = 2;
+const DECAL_TEXTURE_URL = 'assets/decal.png';
 const GROUND_TEXTURE_URL = 'assets/ground.png';
 
 // Initialize Three.js
@@ -465,6 +469,18 @@ function getZombieMoveDirection(zombie) {
     return direction;
 }
 
+function isPropSpawnClear(position, radius) {
+    if (position.distanceTo(player.position) < radius + PLAYER_SPAWN_RADIUS) {
+        return false;
+    }
+    for (const point of propSpawnPoints) {
+        if (position.distanceTo(point.position) < radius + point.radius) {
+            return false;
+        }
+    }
+    return true;
+}
+
 function getPropSpawnPosition(minX, maxX, minZ, maxZ, radius, maxAttempts = 40) {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         const candidate = new THREE.Vector3(
@@ -472,7 +488,7 @@ function getPropSpawnPosition(minX, maxX, minZ, maxZ, radius, maxAttempts = 40) 
             0,
             minZ + Math.random() * (maxZ - minZ)
         );
-        if (!isPositionBlocked(candidate, radius)) {
+        if (!isPositionBlocked(candidate, radius) && isPropSpawnClear(candidate, radius)) {
             return candidate;
         }
     }
@@ -608,11 +624,12 @@ function createDebrisModels() {
                 child.receiveShadow = true;
             }
         });
-        debris.position.copy(getPropSpawnPosition(-30, 30, -40, 20, 1.2));
+        debris.position.copy(getPropSpawnPosition(-30, 30, -40, 20, 1.6));
         debris.position.y = 0.3;
         debris.rotation.set(0, Math.random() * Math.PI * 2, 0);
         scene.add(debris);
         registerCollider(debris, 0.1);
+        propSpawnPoints.push({ position: debris.position.clone(), radius: 1.6 });
     }
 
     debrisCreated = true;
@@ -634,7 +651,7 @@ function createCars() {
         });
 
         // Random positioning
-        car.position.copy(getPropSpawnPosition(-15, 15, -30, 20, 1.8));
+        car.position.copy(getPropSpawnPosition(-15, 15, -30, 20, 2.2));
         car.position.y = 0;
         centerModelOnFloor(car);
         car.position.y += CAR_GROUND_OFFSET;
@@ -648,6 +665,7 @@ function createCars() {
         scene.add(car);
         registerCollider(car, 0.3);
         cars.push(car);
+        propSpawnPoints.push({ position: car.position.clone(), radius: 2.2 });
     }
 
     carsCreated = true;
@@ -1179,10 +1197,13 @@ function createBulletTracer(raycaster) {
 
 function createBulletDecal(position, normal) {
     if (!position) return;
+    if (!decalTexture) {
+        decalTexture = new THREE.TextureLoader().load(DECAL_TEXTURE_URL);
+    }
     const decalSize = 0.35;
     const decalGeometry = new THREE.PlaneGeometry(decalSize, decalSize);
     const decalMaterial = new THREE.MeshBasicMaterial({
-        color: 0x222222,
+        map: decalTexture,
         transparent: true,
         opacity: 0.85
     });
