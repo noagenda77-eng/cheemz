@@ -478,14 +478,23 @@ function tryZombieHop(zombie, direction, now) {
     }
 
     const lowOrigin = zombie.position.clone().add(new THREE.Vector3(0, 0.5, 0));
-    const highOrigin = zombie.position.clone().add(new THREE.Vector3(0, 1.6, 0));
     const hopCheckDistance = 1.6;
-    const lowBlocked = getClearDistance(lowOrigin, direction, hopCheckDistance) < hopCheckDistance - 0.1;
-    const highClear = getClearDistance(highOrigin, direction, hopCheckDistance) >= hopCheckDistance - 0.1;
-
-    if (lowBlocked && highClear) {
+    navigationRaycaster.set(lowOrigin, direction);
+    navigationRaycaster.far = hopCheckDistance;
+    const hits = navigationRaycaster.intersectObjects(collisionObjects, true);
+    const hit = hits[0];
+    if (!hit) {
+        return false;
+    }
+    const hitBounds = new THREE.Box3().setFromObject(hit.object);
+    if (!Number.isFinite(hitBounds.max.y)) {
+        return false;
+    }
+    const hopHeight = 1.2;
+    const obstacleHeight = hitBounds.max.y - zombie.position.y;
+    if (obstacleHeight > 0.1 && obstacleHeight <= hopHeight) {
         zombie.userData.isJumping = true;
-        zombie.userData.verticalVelocity = 0.18;
+        zombie.userData.verticalVelocity = 0.22;
         zombie.userData.jumpCooldownUntil = now + 1400;
         return true;
     }
@@ -521,7 +530,7 @@ function updateZombieTactic(zombie, toPlayerDirection, horizontalDistance, canSe
         zombie.userData.tacticAngle = baseAngle + (Math.random() - 0.5) * 0.6;
     } else if (tactic === 'flank') {
         const flankSide = Math.random() < 0.5 ? -1 : 1;
-        zombie.userData.tacticAngle = player.rotation.y + flankSide * (Math.PI * 0.4 + Math.random() * 0.5);
+        zombie.userData.tacticAngle = player.rotation.y + flankSide * (Math.PI * 0.3 + Math.random() * 0.3);
     }
 }
 
