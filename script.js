@@ -2597,7 +2597,8 @@ function animate() {
         if (!wavePending) {
             spawnTimer++;
         }
-        if (!wavePending && spawnTimer >= 78 && gameState.zombiesSpawned < gameState.zombiesInWave) {
+        const spawnInterval = Math.max(36, Math.round(78 - (gameState.wave - 1) * 4));
+        if (!wavePending && spawnTimer >= spawnInterval && gameState.zombiesSpawned < gameState.zombiesInWave) {
             spawnZombie();
             spawnTimer = 0;
         }
