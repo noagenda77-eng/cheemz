@@ -50,6 +50,7 @@ const collisionObjects = [];
 let zombieModel = null;
 let zombieClips = [];
 let carModel = null;
+let debrisModel = null;
 let flashlight = null;
 let flashlightTarget = null;
 let gunModel = null;
@@ -59,6 +60,7 @@ let gunshotAudio = null;
 let waveAudio = null;
 let hurtAudio = null;
 let carsCreated = false;
+let debrisCreated = false;
 const gunBasePosition = new THREE.Vector3();
 const gunBaseRotation = new THREE.Euler();
 const gunAimPosition = new THREE.Vector3(0.22, -0.28, -0.35);
@@ -73,6 +75,7 @@ const ZOMBIE_SCALE = 1.2;
 const CAR_MODEL_URL = 'assets/car.glb';
 const CAR_SCALE = 3;
 const CAR_GROUND_OFFSET = 0.1;
+const DEBRIS_MODEL_URL = 'assets/debris.glb';
 const GROUND_TEXTURE_URL = 'assets/ground.png';
 
 // Initialize Three.js
@@ -103,6 +106,7 @@ function init() {
     // Load zombie model
     loadZombieModel();
     loadCarModel();
+    loadDebrisModel();
 
     // Hide loading screen
     document.getElementById('loading').style.display = 'none';
@@ -140,6 +144,21 @@ function loadCarModel() {
         undefined,
         (error) => {
             console.error('Failed to load car model:', error);
+        }
+    );
+}
+
+function loadDebrisModel() {
+    const loader = new THREE.GLTFLoader();
+    loader.load(
+        DEBRIS_MODEL_URL,
+        (gltf) => {
+            debrisModel = gltf.scene;
+            createDebrisModels();
+        },
+        undefined,
+        (error) => {
+            console.error('Failed to load debris model:', error);
         }
     );
 }
@@ -530,25 +549,9 @@ function addWindows(building, width, height, depth) {
 
 function createDebris() {
     createCars();
+    createDebrisModels();
 
     // Rubble piles
-    const rubbleMaterial = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.9 });
-
-    for (let i = 0; i < 20; i++) {
-        const rubble = new THREE.Mesh(
-            new THREE.DodecahedronGeometry(0.5 + Math.random()),
-            rubbleMaterial
-        );
-        rubble.position.set(
-            -30 + Math.random() * 60,
-            0.3,
-            -40 + Math.random() * 60
-        );
-        rubble.rotation.set(Math.random(), Math.random(), Math.random());
-        scene.add(rubble);
-        registerCollider(rubble, 0.1);
-    }
-
     // Street lamp posts
     const poleMaterial = new THREE.MeshStandardMaterial({ color: 0x2a2a2a });
 
@@ -575,6 +578,32 @@ function createDebris() {
         lampHead.position.set(pole.position.x, 8, pole.position.z);
         scene.add(lampHead);
     }
+}
+
+function createDebrisModels() {
+    if (debrisCreated || !debrisModel) return;
+
+    for (let i = 0; i < 20; i++) {
+        const debris = debrisModel.clone(true);
+        centerModelOnFloor(debris);
+        debris.traverse((child) => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+        debris.position.set(
+            -30 + Math.random() * 60,
+            0.3,
+            -40 + Math.random() * 60
+        );
+        debris.rotation.set(Math.random(), Math.random(), Math.random());
+        scene.add(debris);
+        registerCollider(debris, 0.1);
+    }
+
+    debrisCreated = true;
+    refreshCollisionBoxes();
 }
 
 function createCars() {
@@ -1232,7 +1261,7 @@ function createGibEffect(position) {
     const chunks = [];
     for (let i = 0; i < 36; i++) {
         const chunk = new THREE.Mesh(
-            new THREE.BoxGeometry(0.21, 0.21, 0.21),
+            new THREE.BoxGeometry(0.105, 0.105, 0.105),
             new THREE.MeshStandardMaterial({ color: 0x7a1a1a, roughness: 0.8 })
         );
         chunk.position.copy(position);
@@ -1262,7 +1291,7 @@ function createGibEffect(position) {
             }
         });
 
-        if (frames < 70) {
+        if (frames < 140) {
             requestAnimationFrame(animateGibs);
         } else {
             chunks.forEach((chunk) => scene.remove(chunk));
