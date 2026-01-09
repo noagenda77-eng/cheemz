@@ -603,7 +603,7 @@ function createCars() {
 
         // Some cars are flipped or tilted
         if (Math.random() > 0.7) {
-            car.rotation.z = Math.random() * 0.5;
+            car.rotation.z = Math.random() * 0.2;
         }
 
         scene.add(car);
