@@ -76,6 +76,7 @@ const CAR_MODEL_URL = 'assets/car.glb';
 const CAR_SCALE = 3;
 const CAR_GROUND_OFFSET = 0.1;
 const DEBRIS_MODEL_URL = 'assets/debris.glb';
+const DEBRIS_SCALE = 2;
 const GROUND_TEXTURE_URL = 'assets/ground.png';
 
 // Initialize Three.js
@@ -464,6 +465,20 @@ function getZombieMoveDirection(zombie) {
     return direction;
 }
 
+function getPropSpawnPosition(minX, maxX, minZ, maxZ, radius, maxAttempts = 40) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const candidate = new THREE.Vector3(
+            minX + Math.random() * (maxX - minX),
+            0,
+            minZ + Math.random() * (maxZ - minZ)
+        );
+        if (!isPositionBlocked(candidate, radius)) {
+            return candidate;
+        }
+    }
+    return new THREE.Vector3(0, 0, 0);
+}
+
 function createBuildings() {
     const buildingMaterial = new THREE.MeshStandardMaterial({
         color: 0x2a2a35,
@@ -585,6 +600,7 @@ function createDebrisModels() {
 
     for (let i = 0; i < 20; i++) {
         const debris = debrisModel.clone(true);
+        debris.scale.setScalar(DEBRIS_SCALE);
         centerModelOnFloor(debris);
         debris.traverse((child) => {
             if (child.isMesh) {
@@ -592,12 +608,9 @@ function createDebrisModels() {
                 child.receiveShadow = true;
             }
         });
-        debris.position.set(
-            -30 + Math.random() * 60,
-            0.3,
-            -40 + Math.random() * 60
-        );
-        debris.rotation.set(Math.random(), Math.random(), Math.random());
+        debris.position.copy(getPropSpawnPosition(-30, 30, -40, 20, 1.2));
+        debris.position.y = 0.3;
+        debris.rotation.set(0, Math.random() * Math.PI * 2, 0);
         scene.add(debris);
         registerCollider(debris, 0.1);
     }
@@ -621,11 +634,8 @@ function createCars() {
         });
 
         // Random positioning
-        car.position.set(
-            -15 + Math.random() * 30,
-            0,
-            -30 + Math.random() * 50
-        );
+        car.position.copy(getPropSpawnPosition(-15, 15, -30, 20, 1.8));
+        car.position.y = 0;
         centerModelOnFloor(car);
         car.position.y += CAR_GROUND_OFFSET;
         car.rotation.y = Math.random() * Math.PI;
