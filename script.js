@@ -71,6 +71,8 @@ const navigationRaycaster = new THREE.Raycaster();
 const ZOMBIE_MODEL_URL = 'assets/zombie.glb';
 const ZOMBIE_SCALE = 1.2;
 const CAR_MODEL_URL = 'assets/car.glb';
+const CAR_SCALE = 3;
+const CAR_GROUND_OFFSET = 0.2;
 const GROUND_TEXTURE_URL = 'assets/ground.png';
 
 // Initialize Three.js
@@ -581,7 +583,9 @@ function createCars() {
     // Destroyed cars
     for (let i = 0; i < 8; i++) {
         const car = carModel.clone(true);
+        car.scale.setScalar(CAR_SCALE);
         centerModelOnFloor(car);
+        car.position.y += CAR_GROUND_OFFSET;
         car.traverse((child) => {
             if (child.isMesh) {
                 child.castShadow = true;
