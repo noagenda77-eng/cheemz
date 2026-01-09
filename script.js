@@ -48,6 +48,7 @@ const colliders = [];
 const collisionObjects = [];
 let zombieModel = null;
 let zombieClips = [];
+let carModel = null;
 let flashlight = null;
 let flashlightTarget = null;
 let gunModel = null;
@@ -67,6 +68,7 @@ const navigationRaycaster = new THREE.Raycaster();
 
 const ZOMBIE_MODEL_URL = 'assets/zombie.glb';
 const ZOMBIE_SCALE = 1.2;
+const CAR_MODEL_URL = 'assets/car.glb';
 const GROUND_TEXTURE_URL = 'assets/ground.png';
 
 // Initialize Three.js
@@ -96,6 +98,7 @@ function init() {
 
     // Load zombie model
     loadZombieModel();
+    loadCarModel();
 
     // Hide loading screen
     document.getElementById('loading').style.display = 'none';
@@ -118,6 +121,20 @@ function loadZombieModel() {
         undefined,
         (error) => {
             console.error('Failed to load zombie model:', error);
+        }
+    );
+}
+
+function loadCarModel() {
+    const loader = new THREE.GLTFLoader();
+    loader.load(
+        CAR_MODEL_URL,
+        (gltf) => {
+            carModel = gltf.scene;
+        },
+        undefined,
+        (error) => {
+            console.error('Failed to load car model:', error);
         }
     );
 }
@@ -508,27 +525,38 @@ function addWindows(building, width, height, depth) {
 
 function createDebris() {
     // Destroyed cars
-    const carMaterial = new THREE.MeshStandardMaterial({ color: 0x333344, roughness: 0.6 });
-
     for (let i = 0; i < 8; i++) {
-        const car = new THREE.Group();
+        let car;
+        if (carModel) {
+            car = carModel.clone(true);
+            centerModelOnFloor(car);
+            car.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+        } else {
+            const carMaterial = new THREE.MeshStandardMaterial({ color: 0x333344, roughness: 0.6 });
+            car = new THREE.Group();
 
-        // Car body
-        const body = new THREE.Mesh(
-            new THREE.BoxGeometry(2, 1, 4),
-            carMaterial
-        );
-        body.position.y = 0.7;
-        car.add(body);
+            // Car body
+            const body = new THREE.Mesh(
+                new THREE.BoxGeometry(2, 1, 4),
+                carMaterial
+            );
+            body.position.y = 0.7;
+            car.add(body);
 
-        // Car roof
-        const roof = new THREE.Mesh(
-            new THREE.BoxGeometry(1.5, 0.8, 2),
-            carMaterial
-        );
-        roof.position.y = 1.5;
-        roof.position.z = -0.3;
-        car.add(roof);
+            // Car roof
+            const roof = new THREE.Mesh(
+                new THREE.BoxGeometry(1.5, 0.8, 2),
+                carMaterial
+            );
+            roof.position.y = 1.5;
+            roof.position.z = -0.3;
+            car.add(roof);
+        }
 
         // Random positioning
         car.position.set(
