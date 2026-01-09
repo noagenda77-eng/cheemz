@@ -339,11 +339,18 @@ function applyPropertyMap(material, geometry, propertyTexture) {
 function createEnvironment() {
     // Ground
     const groundGeometry = new THREE.PlaneGeometry(200, 200);
+    const groundColorTexture = new THREE.TextureLoader().load(GROUND_TEXTURE_URL);
+    groundColorTexture.colorSpace = THREE.SRGBColorSpace;
+    groundColorTexture.wrapS = THREE.RepeatWrapping;
+    groundColorTexture.wrapT = THREE.RepeatWrapping;
+    groundColorTexture.repeat.set(8, 8);
     const propertyTexture = new THREE.TextureLoader().load(GROUND_TEXTURE_URL);
+    propertyTexture.colorSpace = THREE.NoColorSpace;
     propertyTexture.wrapS = THREE.RepeatWrapping;
     propertyTexture.wrapT = THREE.RepeatWrapping;
     propertyTexture.repeat.set(8, 8);
     const groundMaterial = new THREE.MeshStandardMaterial({
+        map: groundColorTexture,
         color: 0x3f3f45,
         roughness: 1,
         metalness: 1
@@ -356,11 +363,16 @@ function createEnvironment() {
 
     // Wet street effect
     const streetGeometry = new THREE.PlaneGeometry(15, 100);
+    const streetColorTexture = groundColorTexture.clone();
+    streetColorTexture.wrapS = THREE.RepeatWrapping;
+    streetColorTexture.wrapT = THREE.RepeatWrapping;
+    streetColorTexture.repeat.set(1.5, 8);
     const streetPropertyTexture = propertyTexture.clone();
     streetPropertyTexture.wrapS = THREE.RepeatWrapping;
     streetPropertyTexture.wrapT = THREE.RepeatWrapping;
     streetPropertyTexture.repeat.set(1.5, 8);
     const streetMaterial = new THREE.MeshStandardMaterial({
+        map: streetColorTexture,
         color: 0x2e2e33,
         roughness: 1,
         metalness: 1
