@@ -1144,7 +1144,7 @@ function shoot() {
     const nearestEnvironmentHit = environmentIntersects[0];
 
     if (nearestEnvironmentHit && (!nearestZombieHit || nearestEnvironmentHit.distance <= nearestZombieHit.distance)) {
-        createBulletDecal(nearestEnvironmentHit.point, nearestEnvironmentHit.face?.normal);
+        createBulletDecal(nearestEnvironmentHit);
     } else if (nearestZombieHit) {
         const hitObject = nearestZombieHit.object;
         const zombie = hitObject.userData.zombieRoot ?? findZombieRoot(hitObject);
@@ -1195,8 +1195,8 @@ function createBulletTracer(raycaster) {
     setTimeout(() => scene.remove(tracer), 90);
 }
 
-function createBulletDecal(position, normal) {
-    if (!position) return;
+function createBulletDecal(hit) {
+    if (!hit?.point) return;
     if (!decalTexture) {
         decalTexture = new THREE.TextureLoader().load(DECAL_TEXTURE_URL);
     }
@@ -1208,11 +1208,14 @@ function createBulletDecal(position, normal) {
         opacity: 0.85
     });
     const decal = new THREE.Mesh(decalGeometry, decalMaterial);
-    decal.position.copy(position);
-    if (normal) {
-        const target = normal.clone().normalize();
+    decal.position.copy(hit.point);
+    if (hit.face?.normal) {
+        const target = hit.face.normal.clone().normalize();
+        if (hit.object) {
+            target.transformDirection(hit.object.matrixWorld);
+        }
         decal.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), target);
-        decal.position.add(target.multiplyScalar(0.02));
+        decal.position.add(target.clone().multiplyScalar(0.02));
     }
     scene.add(decal);
     bulletDecals.push(decal);
