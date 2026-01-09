@@ -1559,6 +1559,7 @@ function spawnZombie() {
         hitMeshes,
         lastPosition: zombie.position.clone(),
         lastMoveTime: performance.now(),
+        spawnTime: performance.now(),
         velocity: new THREE.Vector3(),
         isAttacking: false,  // Track current animation state
         isCrawling: false,   // Track crawling state (on cars)
@@ -1767,6 +1768,22 @@ function updateZombies(delta) {
 
         if (!zombie.userData.velocity) {
             zombie.userData.velocity = new THREE.Vector3();
+        }
+
+        if (now - (zombie.userData.spawnTime ?? now) > 60000) {
+            zombie.position.copy(getZombieSpawnPosition(0.5));
+            zombie.userData.lastPosition = zombie.position.clone();
+            zombie.userData.lastMoveTime = now;
+            zombie.userData.attackCooldown = 0;
+            zombie.userData.velocity.set(0, 0, 0);
+            zombie.userData.spawnTime = now;
+            if (zombie.userData.ai) {
+                zombie.userData.ai.state = ZombieState.PURSUING;
+                zombie.userData.ai.lastKnownPlayerPos = null;
+                zombie.userData.ai.hitStunTimer = 0;
+                zombie.userData.ai.attackWindup = 0;
+            }
+            return;
         }
         
         // Update AI state machine
