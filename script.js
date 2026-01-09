@@ -72,7 +72,7 @@ const ZOMBIE_MODEL_URL = 'assets/zombie.glb';
 const ZOMBIE_SCALE = 1.2;
 const CAR_MODEL_URL = 'assets/car.glb';
 const CAR_SCALE = 3;
-const CAR_GROUND_OFFSET = 0.6;
+const CAR_GROUND_OFFSET = 0.35;
 const GROUND_TEXTURE_URL = 'assets/ground.png';
 
 // Initialize Three.js
