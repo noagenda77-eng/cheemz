@@ -456,17 +456,63 @@ function getClearDistance(origin, direction, range = 5) {
     return hits.length > 0 ? hits[0].distance : range;
 }
 
-function getZombieMoveDirection(zombie) {
-    const direction = new THREE.Vector3();
-    direction.subVectors(player.position, zombie.position);
-    direction.y = 0;
-    const distance = direction.length();
-    if (distance < 0.0001) {
-        return direction;
+function updateZombieTactic(zombie, toPlayerDirection, horizontalDistance, canSeePlayer, now) {
+    const refreshTime = zombie.userData.nextTacticTime ?? 0;
+    if (now < refreshTime && zombie.userData.tactic) {
+        return;
     }
-    direction.normalize();
 
-    return direction;
+    let tactic = zombie.userData.tactic ?? 'direct';
+    const closeRange = horizontalDistance < 4.5;
+    if (!canSeePlayer) {
+        tactic = 'flank';
+    } else if (closeRange) {
+        tactic = Math.random() < 0.65 ? 'strafe' : 'direct';
+    } else {
+        const roll = Math.random();
+        tactic = roll < 0.45 ? 'flank' : roll < 0.8 ? 'surround' : 'direct';
+    }
+
+    zombie.userData.tactic = tactic;
+    zombie.userData.nextTacticTime = now + 1500 + Math.random() * 1400;
+    zombie.userData.tacticAngle = null;
+    zombie.userData.strafeSide = Math.random() < 0.5 ? -1 : 1;
+
+    if (tactic === 'surround') {
+        const index = zombies.indexOf(zombie);
+        const count = zombies.length || 1;
+        const baseAngle = (index / count) * Math.PI * 2;
+        zombie.userData.tacticAngle = baseAngle + (Math.random() - 0.5) * 0.6;
+    } else if (tactic === 'flank') {
+        const flankSide = Math.random() < 0.5 ? -1 : 1;
+        zombie.userData.tacticAngle = player.rotation.y + flankSide * (Math.PI * 0.4 + Math.random() * 0.5);
+    }
+}
+
+function getZombieTargetPosition(zombie, toPlayerDirection, horizontalDistance) {
+    const tactic = zombie.userData.tactic ?? 'direct';
+    const baseRadius = THREE.MathUtils.clamp(horizontalDistance * 0.55, 2.2, 6.2);
+
+    if (tactic === 'strafe') {
+        const strafeRadius = Math.min(3.2, baseRadius);
+        const strafeDirection = new THREE.Vector3(-toPlayerDirection.z, 0, toPlayerDirection.x)
+            .normalize()
+            .multiplyScalar(zombie.userData.strafeSide ?? 1);
+        const offset = strafeDirection.multiplyScalar(strafeRadius)
+            .add(toPlayerDirection.clone().multiplyScalar(1.1));
+        return player.position.clone().add(offset);
+    }
+
+    if (tactic === 'flank' || tactic === 'surround') {
+        let angle = zombie.userData.tacticAngle;
+        if (angle === null || angle === undefined) {
+            angle = Math.atan2(toPlayerDirection.z, toPlayerDirection.x);
+        }
+        const offset = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle)).multiplyScalar(baseRadius);
+        return player.position.clone().add(offset);
+    }
+
+    return player.position.clone();
 }
 
 function isPropSpawnClear(position, radius) {
@@ -980,7 +1026,18 @@ function updateZombies(delta) {
         toPlayer.y = 0;
         const horizontalDistance = Math.hypot(toPlayer.x, toPlayer.z);
         const toPlayerDirection = horizontalDistance > 0.0001 ? toPlayer.clone().normalize() : new THREE.Vector3();
-        const direction = getZombieMoveDirection(zombie);
+        const sightOrigin = zombie.position.clone().add(new THREE.Vector3(0, 1, 0));
+        const canSeePlayer = horizontalDistance > 0.1
+            && getClearDistance(sightOrigin, toPlayerDirection, horizontalDistance) >= horizontalDistance - 0.2;
+
+        updateZombieTactic(zombie, toPlayerDirection, horizontalDistance, canSeePlayer, now);
+        const targetPosition = getZombieTargetPosition(zombie, toPlayerDirection, horizontalDistance);
+        const direction = targetPosition.clone().sub(zombie.position);
+        direction.y = 0;
+        const targetDistance = Math.hypot(direction.x, direction.z);
+        if (targetDistance > 0.0001) {
+            direction.normalize();
+        }
 
         const stopRange = zombie.userData.stopRange ?? 1.0;
         const minRange = zombie.userData.minRange ?? 0;
@@ -988,7 +1045,7 @@ function updateZombies(delta) {
         const maxForce = zombie.userData.maxForce ?? maxSpeed * 0.6;
 
         let desiredVelocity = new THREE.Vector3();
-        if (horizontalDistance > stopRange) {
+        if (horizontalDistance > stopRange || zombie.userData.tactic === 'strafe') {
             desiredVelocity = direction.clone().multiplyScalar(maxSpeed);
         } else {
             // Attack player
@@ -1002,8 +1059,8 @@ function updateZombies(delta) {
         }
 
         const arrivalRadius = 3.5;
-        if (horizontalDistance < arrivalRadius && horizontalDistance > stopRange) {
-            const rampedSpeed = maxSpeed * (horizontalDistance / arrivalRadius);
+        if (targetDistance < arrivalRadius && targetDistance > 0.2) {
+            const rampedSpeed = maxSpeed * (targetDistance / arrivalRadius);
             desiredVelocity = direction.clone().multiplyScalar(rampedSpeed);
         }
 
@@ -1011,11 +1068,11 @@ function updateZombies(delta) {
 
         const origin = zombie.position.clone().add(new THREE.Vector3(0, 1, 0));
         const lookAhead = 3 + maxSpeed * 25;
-        const pathBlocked = horizontalDistance > 0.1
-            && getClearDistance(origin, toPlayerDirection, horizontalDistance) < horizontalDistance - 0.1;
+        const pathBlocked = targetDistance > 0.1
+            && getClearDistance(origin, direction, targetDistance) < targetDistance - 0.1;
         if (pathBlocked) {
-            const left = new THREE.Vector3(-toPlayerDirection.z, 0, toPlayerDirection.x).normalize();
-            const right = new THREE.Vector3(toPlayerDirection.z, 0, -toPlayerDirection.x).normalize();
+            const left = new THREE.Vector3(-direction.z, 0, direction.x).normalize();
+            const right = new THREE.Vector3(direction.z, 0, -direction.x).normalize();
             const sideProbeDistance = Math.max(2.5, lookAhead * 0.6);
             const leftClear = getClearDistance(origin, left, sideProbeDistance);
             const rightClear = getClearDistance(origin, right, sideProbeDistance);
