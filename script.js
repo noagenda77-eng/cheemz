@@ -456,51 +456,6 @@ function getClearDistance(origin, direction, range = 5) {
     return hits.length > 0 ? hits[0].distance : range;
 }
 
-function updateZombieVerticalMotion(zombie, frameScale) {
-    if (zombie.userData.verticalVelocity === undefined) {
-        zombie.userData.verticalVelocity = 0;
-    }
-    const gravity = 0.015;
-    zombie.userData.verticalVelocity -= gravity * frameScale;
-    zombie.position.y += zombie.userData.verticalVelocity * frameScale;
-
-    if (zombie.position.y <= 0) {
-        zombie.position.y = 0;
-        zombie.userData.verticalVelocity = 0;
-        zombie.userData.isJumping = false;
-    }
-}
-
-function tryZombieHop(zombie, direction, now) {
-    const jumpCooldownUntil = zombie.userData.jumpCooldownUntil ?? 0;
-    if (now < jumpCooldownUntil || zombie.userData.isJumping) {
-        return false;
-    }
-
-    const lowOrigin = zombie.position.clone().add(new THREE.Vector3(0, 0.5, 0));
-    const hopCheckDistance = 1.6;
-    navigationRaycaster.set(lowOrigin, direction);
-    navigationRaycaster.far = hopCheckDistance;
-    const hits = navigationRaycaster.intersectObjects(collisionObjects, true);
-    const hit = hits[0];
-    if (!hit) {
-        return false;
-    }
-    const hitBounds = new THREE.Box3().setFromObject(hit.object);
-    if (!Number.isFinite(hitBounds.max.y)) {
-        return false;
-    }
-    const hopHeight = 1.2;
-    const obstacleHeight = hitBounds.max.y - zombie.position.y;
-    if (obstacleHeight > 0.1 && obstacleHeight <= hopHeight) {
-        zombie.userData.isJumping = true;
-        zombie.userData.verticalVelocity = 0.22;
-        zombie.userData.jumpCooldownUntil = now + 1400;
-        return true;
-    }
-    return false;
-}
-
 function updateZombieTactic(zombie, toPlayerDirection, horizontalDistance, canSeePlayer, now) {
     const refreshTime = zombie.userData.nextTacticTime ?? 0;
     if (now < refreshTime && zombie.userData.tactic) {
