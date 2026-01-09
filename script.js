@@ -1200,7 +1200,7 @@ function createBulletDecal(hit) {
     if (!decalTexture) {
         decalTexture = new THREE.TextureLoader().load(DECAL_TEXTURE_URL);
     }
-    const decalSize = 0.35;
+    const decalSize = 0.35 / 3;
     const decalGeometry = new THREE.PlaneGeometry(decalSize, decalSize);
     const decalMaterial = new THREE.MeshBasicMaterial({
         map: decalTexture,
