@@ -11,10 +11,12 @@ const gameState = {
     maxAmmo: 30,
     reserveAmmo: Infinity,
     isReloading: false,
+    reloadStartTime: 0,
+    reloadDuration: 2000,
     isPlaying: false,
     isSprinting: false,
     isAiming: false,
-    zombiesInWave: 5,
+    zombiesInWave: 20,
     zombiesSpawned: 0,
     zombiesKilled: 0
 };
@@ -55,6 +57,7 @@ let gunshotAudio = null;
 let waveAudio = null;
 let hurtAudio = null;
 const gunBasePosition = new THREE.Vector3();
+const gunBaseRotation = new THREE.Euler();
 const gunAimPosition = new THREE.Vector3(0.22, -0.28, -0.35);
 const BASE_FOV = 75;
 const AIM_FOV = 25;
@@ -264,6 +267,7 @@ function setupGunModel() {
     gunModel.position.set(0.32, -0.34, -0.55);
     gunModel.rotation.set(-0.02, 0.03, 0.03);
     gunBasePosition.copy(gunModel.position);
+    gunBaseRotation.copy(gunModel.rotation);
 
     weaponRig.add(gunModel);
 }
@@ -313,18 +317,45 @@ function updateMuzzleFlashPosition() {
     muzzleFlash.style.top = `${clampedY}px`;
 }
 
+function applyPropertyMap(material, geometry, propertyTexture) {
+    if (geometry.attributes.uv && !geometry.attributes.uv2) {
+        geometry.setAttribute('uv2', new THREE.BufferAttribute(geometry.attributes.uv.array, 2));
+    }
+    material.aoMap = propertyTexture;
+    material.roughnessMap = propertyTexture;
+    material.metalnessMap = propertyTexture;
+    material.onBeforeCompile = (shader) => {
+        shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <roughnessmap_fragment>',
+            [
+                '#include <roughnessmap_fragment>',
+                'roughnessFactor = 1.0 - roughnessFactor;'
+            ].join('\n')
+        );
+    };
+    material.needsUpdate = true;
+}
+
 function createEnvironment() {
     // Ground
     const groundGeometry = new THREE.PlaneGeometry(200, 200);
-    const groundTexture = new THREE.TextureLoader().load(GROUND_TEXTURE_URL);
-    groundTexture.wrapS = THREE.RepeatWrapping;
-    groundTexture.wrapT = THREE.RepeatWrapping;
-    groundTexture.repeat.set(8, 8);
+    const groundColorTexture = new THREE.TextureLoader().load(GROUND_TEXTURE_URL);
+    groundColorTexture.colorSpace = THREE.SRGBColorSpace;
+    groundColorTexture.wrapS = THREE.RepeatWrapping;
+    groundColorTexture.wrapT = THREE.RepeatWrapping;
+    groundColorTexture.repeat.set(8, 8);
+    const propertyTexture = new THREE.TextureLoader().load(GROUND_TEXTURE_URL);
+    propertyTexture.colorSpace = THREE.NoColorSpace;
+    propertyTexture.wrapS = THREE.RepeatWrapping;
+    propertyTexture.wrapT = THREE.RepeatWrapping;
+    propertyTexture.repeat.set(8, 8);
     const groundMaterial = new THREE.MeshStandardMaterial({
-        map: groundTexture,
-        roughness: 0.9,
-        metalness: 0.1
+        map: groundColorTexture,
+        color: 0x3f3f45,
+        roughness: 1,
+        metalness: 1
     });
+    applyPropertyMap(groundMaterial, groundGeometry, propertyTexture);
     const ground = new THREE.Mesh(groundGeometry, groundMaterial);
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
@@ -332,15 +363,21 @@ function createEnvironment() {
 
     // Wet street effect
     const streetGeometry = new THREE.PlaneGeometry(15, 100);
-    const streetTexture = new THREE.TextureLoader().load(GROUND_TEXTURE_URL);
-    streetTexture.wrapS = THREE.RepeatWrapping;
-    streetTexture.wrapT = THREE.RepeatWrapping;
-    streetTexture.repeat.set(1.5, 8);
+    const streetColorTexture = groundColorTexture.clone();
+    streetColorTexture.wrapS = THREE.RepeatWrapping;
+    streetColorTexture.wrapT = THREE.RepeatWrapping;
+    streetColorTexture.repeat.set(1.5, 8);
+    const streetPropertyTexture = propertyTexture.clone();
+    streetPropertyTexture.wrapS = THREE.RepeatWrapping;
+    streetPropertyTexture.wrapT = THREE.RepeatWrapping;
+    streetPropertyTexture.repeat.set(1.5, 8);
     const streetMaterial = new THREE.MeshStandardMaterial({
-        map: streetTexture,
-        roughness: 0.5,
-        metalness: 0.2
+        map: streetColorTexture,
+        color: 0x2e2e33,
+        roughness: 1,
+        metalness: 1
     });
+    applyPropertyMap(streetMaterial, streetGeometry, streetPropertyTexture);
     const street = new THREE.Mesh(streetGeometry, streetMaterial);
     street.rotation.x = -Math.PI / 2;
     street.position.y = 0.01;
@@ -415,19 +452,6 @@ function getZombieMoveDirection(zombie) {
         return direction;
     }
     direction.normalize();
-
-    const origin = zombie.position.clone();
-    origin.y += 1;
-    navigationRaycaster.set(origin, direction);
-    navigationRaycaster.far = distance;
-    const hits = navigationRaycaster.intersectObjects(collisionObjects, true);
-    if (hits.length > 0 && hits[0].distance < distance) {
-        const left = new THREE.Vector3(-direction.z, 0, direction.x);
-        const right = new THREE.Vector3(direction.z, 0, -direction.x);
-        const leftClear = getClearDistance(origin, left);
-        const rightClear = getClearDistance(origin, right);
-        return (leftClear >= rightClear ? left : right).normalize();
-    }
 
     return direction;
 }
@@ -909,6 +933,7 @@ function updateZombies(delta) {
         toPlayer.subVectors(player.position, zombie.position);
         toPlayer.y = 0;
         const horizontalDistance = Math.hypot(toPlayer.x, toPlayer.z);
+        const toPlayerDirection = horizontalDistance > 0.0001 ? toPlayer.clone().normalize() : new THREE.Vector3();
         const direction = getZombieMoveDirection(zombie);
 
         const stopRange = zombie.userData.stopRange ?? 1.0;
@@ -930,7 +955,7 @@ function updateZombies(delta) {
             }
         }
 
-        const arrivalRadius = 6;
+        const arrivalRadius = 3.5;
         if (horizontalDistance < arrivalRadius && horizontalDistance > stopRange) {
             const rampedSpeed = maxSpeed * (horizontalDistance / arrivalRadius);
             desiredVelocity = direction.clone().multiplyScalar(rampedSpeed);
@@ -938,23 +963,66 @@ function updateZombies(delta) {
 
         let steering = desiredVelocity.sub(zombie.userData.velocity).clampLength(0, maxForce);
 
-        const forward = zombie.userData.velocity.lengthSq() > 0.0001
-            ? zombie.userData.velocity.clone().normalize()
-            : direction.clone().normalize();
+        const origin = zombie.position.clone().add(new THREE.Vector3(0, 1, 0));
         const lookAhead = 3 + maxSpeed * 25;
-        navigationRaycaster.set(zombie.position.clone().add(new THREE.Vector3(0, 1, 0)), forward);
-        navigationRaycaster.far = lookAhead;
-        const obstacleHits = navigationRaycaster.intersectObjects(collisionObjects, true);
-        if (obstacleHits.length > 0) {
-            const hit = obstacleHits[0];
-            const normal = hit.face
-                ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld)
-                : new THREE.Vector3();
-            normal.y = 0;
-            if (normal.lengthSq() > 0.0001) {
-                const avoidDesired = normal.normalize().multiplyScalar(maxSpeed);
-                steering = avoidDesired.sub(zombie.userData.velocity).clampLength(0, maxForce * 1.25);
+        const pathBlocked = horizontalDistance > 0.1
+            && getClearDistance(origin, toPlayerDirection, horizontalDistance) < horizontalDistance - 0.1;
+        if (pathBlocked) {
+            const left = new THREE.Vector3(-toPlayerDirection.z, 0, toPlayerDirection.x).normalize();
+            const right = new THREE.Vector3(toPlayerDirection.z, 0, -toPlayerDirection.x).normalize();
+            const sideProbeDistance = Math.max(2.5, lookAhead * 0.6);
+            const leftClear = getClearDistance(origin, left, sideProbeDistance);
+            const rightClear = getClearDistance(origin, right, sideProbeDistance);
+            if (!zombie.userData.avoidSide || Math.abs(leftClear - rightClear) > 0.2) {
+                zombie.userData.avoidSide = leftClear >= rightClear ? -1 : 1;
             }
+            const avoidDirection = zombie.userData.avoidSide === -1 ? left : right;
+            const avoidDesired = avoidDirection.multiplyScalar(maxSpeed);
+            steering = avoidDesired.sub(zombie.userData.velocity).clampLength(0, maxForce * 1.4);
+        } else {
+            zombie.userData.avoidSide = null;
+        }
+
+        if (!zombie.userData.stuckAvoidUntil) {
+            zombie.userData.stuckAvoidUntil = 0;
+        }
+        const isStalled = zombie.userData.velocity.length() < maxSpeed * 0.5 && desiredVelocity.lengthSq() > 0.0001;
+        if (isStalled && zombie.userData.stuckAvoidUntil <= now) {
+            const baseDirection = toPlayerDirection.lengthSq() > 0.0001 ? toPlayerDirection : direction;
+            const rotateLeft = Math.random() < 0.5 ? -1 : 1;
+            const angle = THREE.MathUtils.degToRad(110) * rotateLeft;
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            zombie.userData.stuckAvoidDirection = new THREE.Vector3(
+                baseDirection.x * cos - baseDirection.z * sin,
+                0,
+                baseDirection.x * sin + baseDirection.z * cos
+            ).normalize();
+            zombie.userData.stuckAvoidUntil = now + 1000;
+        }
+
+        if (zombie.userData.stuckAvoidUntil > now && zombie.userData.stuckAvoidDirection) {
+            const stuckDesired = zombie.userData.stuckAvoidDirection.clone().multiplyScalar(maxSpeed);
+            steering = stuckDesired.sub(zombie.userData.velocity).clampLength(0, maxForce * 1.6);
+        } else if (zombie.userData.stuckAvoidUntil <= now) {
+            zombie.userData.stuckAvoidDirection = null;
+        }
+
+        const separation = new THREE.Vector3();
+        const separationRadius = (zombie.userData.collisionRadius ?? 0.7) * 2.2;
+        zombies.forEach((other) => {
+            if (other === zombie) return;
+            const offset = zombie.position.clone().sub(other.position);
+            offset.y = 0;
+            const distance = offset.length();
+            if (distance > 0.0001 && distance < separationRadius) {
+                separation.add(offset.normalize().multiplyScalar((separationRadius - distance) / separationRadius));
+            }
+        });
+        if (separation.lengthSq() > 0.0001) {
+            const separationDesired = separation.normalize().multiplyScalar(maxSpeed);
+            const separationSteering = separationDesired.sub(zombie.userData.velocity).clampLength(0, maxForce * 0.9);
+            steering.add(separationSteering);
         }
 
         zombie.userData.velocity.add(steering.multiplyScalar(frameScale));
@@ -1238,7 +1306,7 @@ function showWaveBanner() {
 }
 
 function startWave() {
-    gameState.zombiesInWave = 5 + gameState.wave * 3;
+    gameState.zombiesInWave = (5 + gameState.wave * 3) * 4;
     gameState.zombiesSpawned = 0;
     gameState.zombiesKilled = 0;
     updateHUD();
@@ -1266,6 +1334,7 @@ function reload() {
     if (gameState.isReloading || gameState.ammo === gameState.maxAmmo) return;
 
     gameState.isReloading = true;
+    gameState.reloadStartTime = performance.now();
     document.getElementById('reload-indicator').style.opacity = '1';
 
     setTimeout(() => {
@@ -1275,7 +1344,7 @@ function reload() {
 
         document.getElementById('reload-indicator').style.opacity = '0';
         updateAmmoDisplay();
-    }, 2000);
+    }, gameState.reloadDuration);
 }
 
 function takeDamage(amount) {
@@ -1307,7 +1376,8 @@ function resetGame() {
     gameState.ammo = 30;
     gameState.reserveAmmo = Infinity;
     gameState.isReloading = false;
-    gameState.zombiesInWave = 5;
+    gameState.reloadStartTime = 0;
+    gameState.zombiesInWave = 20;
     gameState.zombiesSpawned = 0;
     gameState.zombiesKilled = 0;
     gameState.damageFlash = 0;
@@ -1522,6 +1592,24 @@ function animate() {
         if (gunModel) {
             const targetGunPosition = gameState.isAiming ? gunAimPosition : gunBasePosition;
             gunModel.position.lerp(targetGunPosition, 0.18);
+            if (gameState.isReloading) {
+                const elapsed = performance.now() - gameState.reloadStartTime;
+                const progress = Math.min(1, Math.max(0, elapsed / gameState.reloadDuration));
+                let swing;
+                if (progress <= 0.6) {
+                    swing = Math.sin((progress / 0.6) * (Math.PI / 2));
+                } else {
+                    const snapProgress = Math.min(1, ((progress - 0.6) / 0.4) * 3);
+                    swing = 1 - Math.pow(snapProgress, 2);
+                }
+                gunModel.rotation.x = gunBaseRotation.x + 0.35 * swing;
+                gunModel.rotation.y = gunBaseRotation.y + 0.15 * swing;
+                gunModel.rotation.z = gunBaseRotation.z - 0.6 * swing;
+                gunModel.position.y -= 0.08 * swing;
+                gunModel.position.z -= 0.04 * swing;
+            } else {
+                gunModel.rotation.copy(gunBaseRotation);
+            }
         }
 
         if (gameState.health < gameState.maxHealth) {
