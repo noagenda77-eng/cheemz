@@ -317,18 +317,45 @@ function updateMuzzleFlashPosition() {
     muzzleFlash.style.top = `${clampedY}px`;
 }
 
+function applyPropertyMap(material, geometry, propertyTexture) {
+    if (geometry.attributes.uv && !geometry.attributes.uv2) {
+        geometry.setAttribute('uv2', new THREE.BufferAttribute(geometry.attributes.uv.array, 2));
+    }
+    material.aoMap = propertyTexture;
+    material.roughnessMap = propertyTexture;
+    material.metalnessMap = propertyTexture;
+    material.onBeforeCompile = (shader) => {
+        shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <roughnessmap_fragment>',
+            [
+                '#include <roughnessmap_fragment>',
+                'roughnessFactor = 1.0 - roughnessFactor;'
+            ].join('\n')
+        );
+    };
+    material.needsUpdate = true;
+}
+
 function createEnvironment() {
     // Ground
     const groundGeometry = new THREE.PlaneGeometry(200, 200);
-    const groundTexture = new THREE.TextureLoader().load(GROUND_TEXTURE_URL);
-    groundTexture.wrapS = THREE.RepeatWrapping;
-    groundTexture.wrapT = THREE.RepeatWrapping;
-    groundTexture.repeat.set(8, 8);
+    const groundColorTexture = new THREE.TextureLoader().load(GROUND_TEXTURE_URL);
+    groundColorTexture.colorSpace = THREE.SRGBColorSpace;
+    groundColorTexture.wrapS = THREE.RepeatWrapping;
+    groundColorTexture.wrapT = THREE.RepeatWrapping;
+    groundColorTexture.repeat.set(8, 8);
+    const propertyTexture = new THREE.TextureLoader().load(GROUND_TEXTURE_URL);
+    propertyTexture.colorSpace = THREE.NoColorSpace;
+    propertyTexture.wrapS = THREE.RepeatWrapping;
+    propertyTexture.wrapT = THREE.RepeatWrapping;
+    propertyTexture.repeat.set(8, 8);
     const groundMaterial = new THREE.MeshStandardMaterial({
-        map: groundTexture,
-        roughness: 0.9,
-        metalness: 0.1
+        map: groundColorTexture,
+        color: 0x3f3f45,
+        roughness: 1,
+        metalness: 1
     });
+    applyPropertyMap(groundMaterial, groundGeometry, propertyTexture);
     const ground = new THREE.Mesh(groundGeometry, groundMaterial);
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
@@ -341,10 +368,12 @@ function createEnvironment() {
     streetTexture.wrapT = THREE.RepeatWrapping;
     streetTexture.repeat.set(8, 8);
     const streetMaterial = new THREE.MeshStandardMaterial({
-        map: streetTexture,
-        roughness: 0.5,
-        metalness: 0.2
+        map: streetColorTexture,
+        color: 0x2e2e33,
+        roughness: 1,
+        metalness: 1
     });
+    applyPropertyMap(streetMaterial, streetGeometry, streetPropertyTexture);
     const street = new THREE.Mesh(streetGeometry, streetMaterial);
     street.rotation.x = -Math.PI / 2;
     street.position.y = 0.01;
