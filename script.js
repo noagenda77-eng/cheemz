@@ -1097,7 +1097,7 @@ function createBuildings() {
         building.receiveShadow = true;
         scene.add(building);
         buildings.push(building);
-        registerCollider(building);
+        registerCollider(building, 0.2, true);
 
         // Add windows
         addWindows(building, width, height, depth);
@@ -1118,7 +1118,7 @@ function createBuildings() {
         building.receiveShadow = true;
         scene.add(building);
         buildings.push(building);
-        registerCollider(building);
+        registerCollider(building, 0.2, true);
 
         addWindows(building, width, height, depth);
     }
@@ -1132,7 +1132,7 @@ function createBuildings() {
     mainBuilding.castShadow = true;
     scene.add(mainBuilding);
     buildings.push(mainBuilding);
-    registerCollider(mainBuilding);
+    registerCollider(mainBuilding, 0.2, true);
 }
 
 function addWindows(building, width, height, depth) {
@@ -2597,7 +2597,7 @@ function animate() {
         if (!wavePending) {
             spawnTimer++;
         }
-        if (!wavePending && spawnTimer >= 60 && gameState.zombiesSpawned < gameState.zombiesInWave) {
+        if (!wavePending && spawnTimer >= 78 && gameState.zombiesSpawned < gameState.zombiesInWave) {
             spawnZombie();
             spawnTimer = 0;
         }
