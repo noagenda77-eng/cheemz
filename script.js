@@ -13,6 +13,9 @@ const gameState = {
     isReloading: false,
     reloadStartTime: 0,
     reloadDuration: 2000,
+    lastShotTime: 0,
+    shotsFired: 0,
+    shotsHit: 0,
     isPlaying: false,
     isSprinting: false,
     isAiming: false,
@@ -1994,9 +1997,13 @@ function updateZombies(delta) {
 }
 
 function shoot() {
+    const now = performance.now();
+    if (now - gameState.lastShotTime < 300) return;
     if (gameState.ammo <= 0 || gameState.isReloading) return;
 
     gameState.ammo--;
+    gameState.shotsFired++;
+    gameState.lastShotTime = now;
     updateAmmoDisplay();
 
     // Muzzle flash
@@ -2040,6 +2047,7 @@ function shoot() {
             
             zombie.userData.health -= damage;
             showHitMarker();
+            gameState.shotsHit++;
             
             // Apply stun effect (longer for headshots)
             if (zombie.userData.health > 0) {
@@ -2328,6 +2336,10 @@ function gameOver() {
 
     document.getElementById('final-wave').textContent = gameState.wave;
     document.getElementById('final-kills').textContent = gameState.kills;
+    const accuracy = gameState.shotsFired > 0
+        ? Math.round((gameState.shotsHit / gameState.shotsFired) * 100)
+        : 0;
+    document.getElementById('final-accuracy').textContent = `${accuracy}%`;
     document.getElementById('game-over').style.display = 'flex';
 }
 
@@ -2340,6 +2352,9 @@ function resetGame() {
     gameState.reserveAmmo = Infinity;
     gameState.isReloading = false;
     gameState.reloadStartTime = 0;
+    gameState.lastShotTime = 0;
+    gameState.shotsFired = 0;
+    gameState.shotsHit = 0;
     gameState.zombiesInWave = 20;
     gameState.zombiesSpawned = 0;
     gameState.zombiesKilled = 0;
