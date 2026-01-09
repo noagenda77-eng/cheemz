@@ -2269,7 +2269,7 @@ function showWaveBanner() {
 }
 
 function startWave() {
-    gameState.zombiesInWave = (5 + gameState.wave * 3) * 4;
+    gameState.zombiesInWave = (5 + gameState.wave * 3) * 2;
     gameState.zombiesSpawned = 0;
     gameState.zombiesKilled = 0;
     updateHUD();
