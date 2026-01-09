@@ -42,6 +42,7 @@ const mouse = { x: 0, y: 0 };
 let scene, camera, renderer;
 let zombies = [];
 let bullets = [];
+let cars = [];
 let buildings = [];
 let bulletDecals = [];
 const colliders = [];
@@ -57,6 +58,7 @@ let muzzleMesh = null;
 let gunshotAudio = null;
 let waveAudio = null;
 let hurtAudio = null;
+let carsCreated = false;
 const gunBasePosition = new THREE.Vector3();
 const gunBaseRotation = new THREE.Euler();
 const gunAimPosition = new THREE.Vector3(0.22, -0.28, -0.35);
@@ -131,6 +133,7 @@ function loadCarModel() {
         CAR_MODEL_URL,
         (gltf) => {
             carModel = gltf.scene;
+            createCars();
         },
         undefined,
         (error) => {
@@ -524,56 +527,7 @@ function addWindows(building, width, height, depth) {
 }
 
 function createDebris() {
-    // Destroyed cars
-    for (let i = 0; i < 8; i++) {
-        let car;
-        if (carModel) {
-            car = carModel.clone(true);
-            centerModelOnFloor(car);
-            car.traverse((child) => {
-                if (child.isMesh) {
-                    child.castShadow = true;
-                    child.receiveShadow = true;
-                }
-            });
-        } else {
-            const carMaterial = new THREE.MeshStandardMaterial({ color: 0x333344, roughness: 0.6 });
-            car = new THREE.Group();
-
-            // Car body
-            const body = new THREE.Mesh(
-                new THREE.BoxGeometry(2, 1, 4),
-                carMaterial
-            );
-            body.position.y = 0.7;
-            car.add(body);
-
-            // Car roof
-            const roof = new THREE.Mesh(
-                new THREE.BoxGeometry(1.5, 0.8, 2),
-                carMaterial
-            );
-            roof.position.y = 1.5;
-            roof.position.z = -0.3;
-            car.add(roof);
-        }
-
-        // Random positioning
-        car.position.set(
-            -15 + Math.random() * 30,
-            0,
-            -30 + Math.random() * 50
-        );
-        car.rotation.y = Math.random() * Math.PI;
-
-        // Some cars are flipped or tilted
-        if (Math.random() > 0.7) {
-            car.rotation.z = Math.random() * 0.5;
-        }
-
-        scene.add(car);
-        registerCollider(car, 0.3);
-    }
+    createCars();
 
     // Rubble piles
     const rubbleMaterial = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.9 });
@@ -619,6 +573,42 @@ function createDebris() {
         lampHead.position.set(pole.position.x, 8, pole.position.z);
         scene.add(lampHead);
     }
+}
+
+function createCars() {
+    if (carsCreated || !carModel) return;
+
+    // Destroyed cars
+    for (let i = 0; i < 8; i++) {
+        const car = carModel.clone(true);
+        centerModelOnFloor(car);
+        car.traverse((child) => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+
+        // Random positioning
+        car.position.set(
+            -15 + Math.random() * 30,
+            0,
+            -30 + Math.random() * 50
+        );
+        car.rotation.y = Math.random() * Math.PI;
+
+        // Some cars are flipped or tilted
+        if (Math.random() > 0.7) {
+            car.rotation.z = Math.random() * 0.5;
+        }
+
+        scene.add(car);
+        registerCollider(car, 0.3);
+        cars.push(car);
+    }
+
+    carsCreated = true;
+    refreshCollisionBoxes();
 }
 
 function createKorberSign() {
