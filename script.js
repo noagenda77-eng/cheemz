@@ -2064,9 +2064,16 @@ function shoot() {
 
 function createBulletTracer(raycaster) {
     const tracerLength = 30;
+    const tracerOrigin = new THREE.Vector3();
+    if (muzzleMesh) {
+        muzzleMesh.getWorldPosition(tracerOrigin);
+    } else {
+        tracerOrigin.copy(camera.position);
+    }
+    const tracerEnd = raycaster.ray.origin.clone().add(raycaster.ray.direction.clone().multiplyScalar(tracerLength));
     const tracerGeometry = new THREE.BufferGeometry().setFromPoints([
-        camera.position.clone(),
-        raycaster.ray.origin.clone().add(raycaster.ray.direction.clone().multiplyScalar(tracerLength))
+        tracerOrigin,
+        tracerEnd
     ]);
     const tracerMaterial = new THREE.LineBasicMaterial({
         color: 0xffcc66,
