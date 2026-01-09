@@ -977,6 +977,9 @@ function spawnZombie() {
         collisionRadius: 0.1,
         attackCooldown: 0,
         maxForce: 0.018 + gameState.wave * 0.002,
+        verticalVelocity: 0,
+        isJumping: false,
+        jumpCooldownUntil: 0,
         hitMeshes,
         lastPosition: zombie.position.clone(),
         lastMoveTime: performance.now()
@@ -1082,6 +1085,7 @@ function updateZombies(delta) {
             const avoidDirection = zombie.userData.avoidSide === -1 ? left : right;
             const avoidDesired = avoidDirection.multiplyScalar(maxSpeed);
             steering = avoidDesired.sub(zombie.userData.velocity).clampLength(0, maxForce * 1.4);
+            tryZombieHop(zombie, direction, now);
         } else {
             zombie.userData.avoidSide = null;
         }
@@ -1121,6 +1125,8 @@ function updateZombies(delta) {
         if (zombie.position.distanceToSquared(previousPosition) < 0.000001) {
             zombie.userData.velocity.set(0, 0, 0);
         }
+
+        updateZombieVerticalMotion(zombie, frameScale);
 
         // Face player
         zombie.lookAt(player.position.x, zombie.position.y, player.position.z);
