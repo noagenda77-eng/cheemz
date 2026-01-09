@@ -363,14 +363,10 @@ function createEnvironment() {
 
     // Wet street effect
     const streetGeometry = new THREE.PlaneGeometry(15, 100);
-    const streetColorTexture = groundColorTexture.clone();
-    streetColorTexture.wrapS = THREE.RepeatWrapping;
-    streetColorTexture.wrapT = THREE.RepeatWrapping;
-    streetColorTexture.repeat.set(1.5, 8);
-    const streetPropertyTexture = propertyTexture.clone();
-    streetPropertyTexture.wrapS = THREE.RepeatWrapping;
-    streetPropertyTexture.wrapT = THREE.RepeatWrapping;
-    streetPropertyTexture.repeat.set(1.5, 8);
+    const streetTexture = new THREE.TextureLoader().load(GROUND_TEXTURE_URL);
+    streetTexture.wrapS = THREE.RepeatWrapping;
+    streetTexture.wrapT = THREE.RepeatWrapping;
+    streetTexture.repeat.set(8, 8);
     const streetMaterial = new THREE.MeshStandardMaterial({
         map: streetColorTexture,
         color: 0x2e2e33,
