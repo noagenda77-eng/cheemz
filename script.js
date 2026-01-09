@@ -45,8 +45,10 @@ let bullets = [];
 let cars = [];
 let buildings = [];
 let bulletDecals = [];
+let debrisPieces = [];  // Track debris separately for zombie climbing
 const colliders = [];
 const collisionObjects = [];
+const zombieNavigationObjects = [];  // Objects zombies need to navigate around (excludes climbables)
 let zombieModel = null;
 let zombieClips = [];
 let carModel = null;
@@ -411,13 +413,19 @@ function createEnvironment() {
     refreshCollisionBoxes();
 }
 
-function registerCollider(object, padding = 0.2) {
+function registerCollider(object, padding = 0.2, isClimbable = false) {
     colliders.push({
         object,
         box: new THREE.Box3(),
-        padding
+        padding,
+        isClimbable  // Zombies can climb over this
     });
     collisionObjects.push(object);
+
+    // Only add non-climbable objects to zombie navigation
+    if (!isClimbable) {
+        zombieNavigationObjects.push(object);
+    }
 }
 
 function refreshCollisionBoxes() {
@@ -434,6 +442,83 @@ function isPositionBlocked(position, radius) {
         }
     }
     return false;
+}
+
+// Check if position is blocked for zombies (ignores climbable objects like debris)
+function isPositionBlockedForZombie(position, radius) {
+    for (const collider of colliders) {
+        if (collider.isClimbable) continue;  // Zombies can walk over climbable objects
+        collisionBox.copy(collider.box).expandByScalar(radius + collider.padding);
+        if (collisionBox.containsPoint(position)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Get the height of any climbable object (debris/cars) at a position for zombie climbing
+function getClimbableHeightAt(position, radius) {
+    let maxHeight = 0;
+
+    // Check debris
+    for (const debris of debrisPieces) {
+        const debrisPos = debris.position;
+        const dx = position.x - debrisPos.x;
+        const dz = position.z - debrisPos.z;
+        const horizontalDist = Math.sqrt(dx * dx + dz * dz);
+
+        // Check if within debris radius (approximate)
+        if (horizontalDist < 2.5) {
+            const box = new THREE.Box3().setFromObject(debris);
+            const debrisHeight = box.max.y;
+
+            // Smooth falloff at edges
+            const falloff = Math.max(0, 1 - (horizontalDist / 2.5));
+            const effectiveHeight = debrisHeight * falloff;
+
+            if (effectiveHeight > maxHeight) {
+                maxHeight = effectiveHeight;
+            }
+        }
+    }
+
+    // Check cars
+    for (const car of cars) {
+        const carPos = car.position;
+        const dx = position.x - carPos.x;
+        const dz = position.z - carPos.z;
+        const horizontalDist = Math.sqrt(dx * dx + dz * dz);
+
+        // Check if within car radius (cars are bigger)
+        if (horizontalDist < 3.5) {
+            const box = new THREE.Box3().setFromObject(car);
+            const carHeight = box.max.y;
+
+            // Smooth falloff at edges
+            const falloff = Math.max(0, 1 - (horizontalDist / 3.5));
+            const effectiveHeight = carHeight * falloff;
+
+            if (effectiveHeight > maxHeight) {
+                maxHeight = effectiveHeight;
+            }
+        }
+    }
+
+    return maxHeight;
+}
+
+// Move with collisions for zombies (can climb over debris)
+function moveZombieWithCollisions(position, delta, radius) {
+    if (delta.lengthSq() === 0) return;
+    const candidate = position.clone();
+    candidate.x += delta.x;
+    if (!isPositionBlockedForZombie(candidate, radius)) {
+        position.x = candidate.x;
+    }
+    candidate.set(position.x, position.y, position.z + delta.z);
+    if (!isPositionBlockedForZombie(candidate, radius)) {
+        position.z = candidate.z;
+    }
 }
 
 function moveWithCollisions(position, delta, radius) {
@@ -456,63 +541,450 @@ function getClearDistance(origin, direction, range = 5) {
     return hits.length > 0 ? hits[0].distance : range;
 }
 
-function updateZombieTactic(zombie, toPlayerDirection, horizontalDistance, canSeePlayer, now) {
-    const refreshTime = zombie.userData.nextTacticTime ?? 0;
-    if (now < refreshTime && zombie.userData.tactic) {
-        return;
+// Get clear distance for zombies (ignores climbable objects like cars and debris)
+function getZombieClearDistance(origin, direction, range = 5) {
+    navigationRaycaster.set(origin, direction);
+    navigationRaycaster.far = range;
+    const hits = navigationRaycaster.intersectObjects(zombieNavigationObjects, true);
+    return hits.length > 0 ? hits[0].distance : range;
+}
+
+// ============================================
+// ENHANCED ZOMBIE AI SYSTEM
+// ============================================
+
+// Zombie behavior types
+const ZombieType = {
+    SHAMBLER: 'shambler',     // Slow but persistent, basic behavior
+    RUNNER: 'runner',         // Fast, aggressive, charges directly
+    STALKER: 'stalker',       // Sneaky, tries to approach from blind spots
+    FLANKER: 'flanker',       // Coordinates with others to surround player
+    BRUTE: 'brute'            // Slow but tanky, breaks through obstacles
+};
+
+// Zombie states
+const ZombieState = {
+    IDLE: 'idle',             // Wandering aimlessly
+    ALERTED: 'alerted',       // Heard something, investigating
+    PURSUING: 'pursuing',     // Actively chasing player
+    ATTACKING: 'attacking',   // In attack range
+    STUNNED: 'stunned',       // Temporarily disabled (hit reaction)
+    FLANKING: 'flanking',     // Moving to flank position
+    WAITING: 'waiting'        // Holding position (for coordinated attacks)
+};
+
+// Initialize zombie AI data
+function initZombieAI(zombie) {
+    const types = Object.values(ZombieType);
+    const typeWeights = [0.4, 0.25, 0.15, 0.15, 0.05]; // Probability weights
+    const roll = Math.random();
+    let cumulative = 0;
+    let selectedType = ZombieType.SHAMBLER;
+    for (let i = 0; i < types.length; i++) {
+        cumulative += typeWeights[i];
+        if (roll < cumulative) {
+            selectedType = types[i];
+            break;
+        }
     }
 
-    let tactic = zombie.userData.tactic ?? 'direct';
-    const closeRange = horizontalDistance < 4.5;
-    if (!canSeePlayer) {
-        tactic = 'flank';
-    } else if (closeRange) {
-        tactic = Math.random() < 0.65 ? 'strafe' : 'direct';
-    } else {
-        const roll = Math.random();
-        tactic = roll < 0.45 ? 'flank' : roll < 0.8 ? 'surround' : 'direct';
+    // Type-specific attributes
+    const typeConfigs = {
+        [ZombieType.SHAMBLER]: {
+            baseSpeed: 0.035,
+            aggroRange: 35,
+            viewAngle: Math.PI * 0.8,
+            patience: 5000,
+            wobbleAmount: 0.25,
+            speedVariation: 0.3
+        },
+        [ZombieType.RUNNER]: {
+            baseSpeed: 0.065,
+            aggroRange: 40,
+            viewAngle: Math.PI * 0.6,
+            patience: 2000,
+            wobbleAmount: 0.08,
+            speedVariation: 0.15
+        },
+        [ZombieType.STALKER]: {
+            baseSpeed: 0.045,
+            aggroRange: 45,
+            viewAngle: Math.PI,
+            patience: 8000,
+            wobbleAmount: 0.12,
+            speedVariation: 0.2
+        },
+        [ZombieType.FLANKER]: {
+            baseSpeed: 0.05,
+            aggroRange: 35,
+            viewAngle: Math.PI * 0.7,
+            patience: 4000,
+            wobbleAmount: 0.15,
+            speedVariation: 0.2
+        },
+        [ZombieType.BRUTE]: {
+            baseSpeed: 0.028,
+            aggroRange: 30,
+            viewAngle: Math.PI * 0.5,
+            patience: 10000,
+            wobbleAmount: 0.3,
+            speedVariation: 0.1
+        }
+    };
+
+    const config = typeConfigs[selectedType];
+    const waveMultiplier = 1 + gameState.wave * 0.08;
+
+    return {
+        type: selectedType,
+        state: ZombieState.PURSUING,  // Start pursuing - they spawn to attack!
+        previousState: ZombieState.PURSUING,
+        stateTimer: 0,
+
+        // Movement
+        baseSpeed: config.baseSpeed * waveMultiplier * (1 + (Math.random() - 0.5) * config.speedVariation),
+        currentSpeed: 0,
+        wobbleOffset: Math.random() * Math.PI * 2,
+        wobbleAmount: config.wobbleAmount,
+        moveDirection: new THREE.Vector3(),
+        targetPosition: null,
+
+        // Perception
+        aggroRange: config.aggroRange,
+        viewAngle: config.viewAngle,
+        lastKnownPlayerPos: null,
+        lastSeenTime: 0,
+        hearingRange: 15,
+
+        // Behavior
+        patience: config.patience,
+        searchTime: 0,
+        wanderTarget: null,
+        wanderTimer: 0,
+        flankAngle: (Math.random() - 0.5) * Math.PI,
+        coordinationGroup: null,
+
+        // Combat
+        attackWindup: 0,
+        attackCooldown: 0,
+        hitStunTimer: 0,
+
+        // Path memory for smoother movement
+        pathHistory: [],
+        pathUpdateTimer: 0
+    };
+}
+
+// Check if zombie can see the player
+function canZombieSeePlayer(zombie) {
+    const ai = zombie.userData.ai;
+    if (!ai) return true; // Fallback: always can see
+
+    const toPlayer = new THREE.Vector3().subVectors(player.position, zombie.position);
+    toPlayer.y = 0;
+    const distance = toPlayer.length();
+
+    // Distance check - always aware within aggro range
+    if (distance > ai.aggroRange) return false;
+
+    // Skip angle check for close range - zombies can "sense" nearby players
+    if (distance < 8) return true;
+
+    // Angle check (field of view) for longer distances
+    const zombieForward = new THREE.Vector3(0, 0, 1).applyQuaternion(zombie.quaternion);
+    zombieForward.y = 0;
+    if (zombieForward.lengthSq() < 0.0001) {
+        zombieForward.set(0, 0, 1);
+    }
+    zombieForward.normalize();
+    toPlayer.normalize();
+
+    const dot = zombieForward.dot(toPlayer);
+    const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+    if (angle > ai.viewAngle / 2) return false;
+
+    // Line of sight check (raycast) - only check if we passed other checks
+    const origin = zombie.position.clone().add(new THREE.Vector3(0, 1.5, 0));
+    const direction = new THREE.Vector3().subVectors(player.position, origin).normalize();
+    navigationRaycaster.set(origin, direction);
+    navigationRaycaster.far = distance;
+    const hits = navigationRaycaster.intersectObjects(collisionObjects, true);
+
+    return hits.length === 0 || hits[0].distance > distance - 0.5;
+}
+
+// Get a flanking position around the player
+function getFlankPosition(zombie, index) {
+    const ai = zombie.userData.ai;
+    const baseAngle = ai.flankAngle + (index * Math.PI * 2 / Math.max(zombies.length, 1));
+    const flankDistance = 4 + Math.random() * 2;
+
+    // Find a position that's behind or to the side of where player is looking
+    const playerForward = new THREE.Vector3();
+    camera.getWorldDirection(playerForward);
+    playerForward.y = 0;
+    playerForward.normalize();
+
+    const flankAngle = Math.atan2(playerForward.x, playerForward.z) + Math.PI + baseAngle;
+
+    return new THREE.Vector3(
+        player.position.x + Math.sin(flankAngle) * flankDistance,
+        0,
+        player.position.z + Math.cos(flankAngle) * flankDistance
+    );
+}
+
+// Get wander target for idle behavior
+function getWanderTarget(zombie) {
+    const wanderRadius = 8;
+    const attempts = 10;
+
+    for (let i = 0; i < attempts; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const distance = 3 + Math.random() * wanderRadius;
+        const target = new THREE.Vector3(
+            zombie.position.x + Math.cos(angle) * distance,
+            0,
+            zombie.position.z + Math.sin(angle) * distance
+        );
+
+        // Keep within bounds
+        target.x = Math.max(-38, Math.min(38, target.x));
+        target.z = Math.max(-38, Math.min(38, target.z));
+
+        if (!isPositionBlocked(target, 0.5)) {
+            return target;
+        }
     }
 
-    zombie.userData.tactic = tactic;
-    zombie.userData.nextTacticTime = now + 1500 + Math.random() * 1400;
-    zombie.userData.tacticAngle = null;
-    zombie.userData.strafeSide = Math.random() < 0.5 ? -1 : 1;
+    return zombie.position.clone();
+}
 
-    if (tactic === 'surround') {
-        const index = zombies.indexOf(zombie);
-        const count = zombies.length || 1;
-        const baseAngle = (index / count) * Math.PI * 2;
-        zombie.userData.tacticAngle = baseAngle + (Math.random() - 0.5) * 0.6;
-    } else if (tactic === 'flank') {
-        const flankSide = Math.random() < 0.5 ? -1 : 1;
-        zombie.userData.tacticAngle = player.rotation.y + flankSide * (Math.PI * 0.3 + Math.random() * 0.3);
+// Update zombie state machine
+function updateZombieState(zombie, delta, now) {
+    const ai = zombie.userData.ai;
+    const toPlayer = new THREE.Vector3().subVectors(player.position, zombie.position);
+    toPlayer.y = 0;
+    const distanceToPlayer = toPlayer.length();
+
+    const canSee = canZombieSeePlayer(zombie);
+
+    // Update last known position if we can see player
+    if (canSee) {
+        ai.lastKnownPlayerPos = player.position.clone();
+        ai.lastSeenTime = now;
+    }
+
+    // State transitions
+    const previousState = ai.state;
+
+    switch (ai.state) {
+        case ZombieState.IDLE:
+            // Idle zombies quickly become alert and pursue
+            if (canSee || distanceToPlayer < 25) {
+                ai.state = ZombieState.PURSUING;
+            } else {
+                // Wander behavior
+                ai.wanderTimer -= delta * 1000;
+                if (ai.wanderTimer <= 0 || !ai.wanderTarget) {
+                    ai.wanderTarget = getWanderTarget(zombie);
+                    ai.wanderTimer = 3000 + Math.random() * 4000;
+                }
+            }
+            break;
+
+        case ZombieState.ALERTED:
+            ai.stateTimer -= delta * 1000;
+            if (ai.stateTimer <= 0) {
+                ai.state = ZombieState.PURSUING;
+            }
+            break;
+
+        case ZombieState.PURSUING:
+            if (distanceToPlayer < 1.5) {
+                ai.state = ZombieState.ATTACKING;
+            }
+            // Flankers might switch to flanking behavior when far away
+            else if (ai.type === ZombieType.FLANKER && distanceToPlayer > 10 && Math.random() < 0.005) {
+                ai.state = ZombieState.FLANKING;
+            }
+            // Stalkers try to flank when far
+            else if (ai.type === ZombieType.STALKER && distanceToPlayer > 12 && Math.random() < 0.003) {
+                ai.state = ZombieState.FLANKING;
+            }
+            break;
+
+        case ZombieState.FLANKING:
+            // Switch back to pursuing when close
+            if (distanceToPlayer < 4) {
+                ai.state = ZombieState.PURSUING;
+            }
+            // Time limit on flanking
+            ai.stateTimer = (ai.stateTimer || 0) + delta * 1000;
+            if (ai.stateTimer > 5000) {
+                ai.state = ZombieState.PURSUING;
+                ai.stateTimer = 0;
+            }
+            break;
+
+        case ZombieState.ATTACKING:
+            if (distanceToPlayer > 2.5) {
+                ai.state = ZombieState.PURSUING;
+            }
+            break;
+
+        case ZombieState.STUNNED:
+            ai.hitStunTimer -= delta * 1000;
+            if (ai.hitStunTimer <= 0) {
+                ai.state = ZombieState.PURSUING;
+            }
+            break;
+    }
+
+    // Track state changes
+    if (ai.state !== previousState) {
+        ai.previousState = previousState;
     }
 }
 
-function getZombieTargetPosition(zombie, toPlayerDirection, horizontalDistance) {
-    const tactic = zombie.userData.tactic ?? 'direct';
-    const baseRadius = THREE.MathUtils.clamp(horizontalDistance * 0.55, 2.2, 6.2);
-
-    if (tactic === 'strafe') {
-        const strafeRadius = Math.min(3.2, baseRadius);
-        const strafeDirection = new THREE.Vector3(-toPlayerDirection.z, 0, toPlayerDirection.x)
-            .normalize()
-            .multiplyScalar(zombie.userData.strafeSide ?? 1);
-        const offset = strafeDirection.multiplyScalar(strafeRadius)
-            .add(toPlayerDirection.clone().multiplyScalar(1.1));
-        return player.position.clone().add(offset);
+// Calculate movement direction based on current state and type
+function getZombieMoveDirection(zombie) {
+    const ai = zombie.userData.ai;
+    if (!ai) {
+        // Fallback for zombies without AI (shouldn't happen)
+        const direction = new THREE.Vector3().subVectors(player.position, zombie.position);
+        direction.y = 0;
+        return direction.lengthSq() > 0.0001 ? direction.normalize() : new THREE.Vector3();
     }
 
-    if (tactic === 'flank' || tactic === 'surround') {
-        let angle = zombie.userData.tacticAngle;
-        if (angle === null || angle === undefined) {
-            angle = Math.atan2(toPlayerDirection.z, toPlayerDirection.x);
+    const now = performance.now();
+    const direction = new THREE.Vector3();
+
+    // Apply wobble for more organic movement
+    const wobble = Math.sin(now * 0.003 + ai.wobbleOffset) * ai.wobbleAmount;
+
+    switch (ai.state) {
+        case ZombieState.IDLE:
+            if (ai.wanderTarget) {
+                direction.subVectors(ai.wanderTarget, zombie.position);
+                direction.y = 0;
+                if (direction.length() < 1) {
+                    ai.wanderTarget = null;
+                    return new THREE.Vector3();
+                }
+            }
+            break;
+
+        case ZombieState.ALERTED:
+            // Turn towards sound/sight but don't move yet
+            if (ai.lastKnownPlayerPos) {
+                direction.subVectors(ai.lastKnownPlayerPos, zombie.position);
+            }
+            direction.multiplyScalar(0.1); // Slow creep forward
+            break;
+
+        case ZombieState.PURSUING:
+            // Always go towards actual player position (they're actively pursuing)
+            direction.subVectors(player.position, zombie.position);
+
+            // Runners take more direct paths
+            if (ai.type !== ZombieType.RUNNER) {
+                // Add slight randomness to path for non-runners
+                direction.x += wobble * 0.3;
+                direction.z += Math.cos(now * 0.002 + ai.wobbleOffset) * ai.wobbleAmount * 0.3;
+            }
+            break;
+
+        case ZombieState.FLANKING: {
+            const zombieIndex = zombies.indexOf(zombie);
+            const flankPos = getFlankPosition(zombie, zombieIndex);
+            direction.subVectors(flankPos, zombie.position);
+
+            // If close to flank position, start approaching player
+            if (direction.length() < 2) {
+                direction.subVectors(player.position, zombie.position);
+            }
+            break;
         }
-        const offset = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle)).multiplyScalar(baseRadius);
-        return player.position.clone().add(offset);
+
+        case ZombieState.ATTACKING:
+            direction.subVectors(player.position, zombie.position);
+            direction.multiplyScalar(0.3); // Slow down when attacking
+            break;
+
+        case ZombieState.STUNNED:
+            // Stagger backwards
+            direction.subVectors(zombie.position, player.position);
+            direction.multiplyScalar(0.2);
+            break;
     }
 
-    return player.position.clone();
+    direction.y = 0;
+
+    if (direction.lengthSq() < 0.0001) {
+        return new THREE.Vector3();
+    }
+
+    // Apply wobble rotation
+    if (ai.state === ZombieState.PURSUING || ai.state === ZombieState.FLANKING) {
+        const wobbleAngle = wobble * 0.2;
+        const cos = Math.cos(wobbleAngle);
+        const sin = Math.sin(wobbleAngle);
+        const x = direction.x * cos - direction.z * sin;
+        const z = direction.x * sin + direction.z * cos;
+        direction.x = x;
+        direction.z = z;
+    }
+
+    return direction.normalize();
+}
+
+// Get speed multiplier based on state and type
+function getZombieSpeedMultiplier(zombie) {
+    const ai = zombie.userData.ai;
+    if (!ai) return 1;
+
+    let multiplier = 1;
+
+    switch (ai.state) {
+        case ZombieState.IDLE:
+            multiplier = 0.3;
+            break;
+        case ZombieState.ALERTED:
+            multiplier = 0.4;
+            break;
+        case ZombieState.PURSUING:
+            multiplier = 1;
+            // Runners get a speed boost when they have line of sight
+            if (ai.type === ZombieType.RUNNER && canZombieSeePlayer(zombie)) {
+                multiplier = 1.3;
+            }
+            break;
+        case ZombieState.FLANKING:
+            multiplier = 0.85;
+            break;
+        case ZombieState.ATTACKING:
+            multiplier = 0.4;
+            break;
+        case ZombieState.STUNNED:
+            multiplier = 0.2;
+            break;
+    }
+
+    // Brutes are always slower but consistent
+    if (ai.type === ZombieType.BRUTE) {
+        multiplier *= 0.7;
+    }
+
+    return multiplier;
+}
+
+// Apply hit stun to zombie
+function stunZombie(zombie, duration = 300) {
+    if (zombie.userData.ai) {
+        zombie.userData.ai.state = ZombieState.STUNNED;
+        zombie.userData.ai.hitStunTimer = duration;
+    }
 }
 
 function isPropSpawnClear(position, radius) {
@@ -645,7 +1117,7 @@ function createDebris() {
         }
 
         scene.add(pole);
-        registerCollider(pole, 0.1);
+        registerCollider(pole, 0.5);  // Larger padding so zombies navigate around
 
         // Lamp head
         const lampHead = new THREE.Mesh(
@@ -674,7 +1146,8 @@ function createDebrisModels() {
         debris.position.y = 0.3;
         debris.rotation.set(0, Math.random() * Math.PI * 2, 0);
         scene.add(debris);
-        registerCollider(debris, 0.1);
+        registerCollider(debris, 0.1, true);  // Mark as climbable for zombies
+        debrisPieces.push(debris);  // Track for height calculations
         propSpawnPoints.push({ position: debris.position.clone(), radius: 1.6 });
     }
 
@@ -709,7 +1182,7 @@ function createCars() {
         }
 
         scene.add(car);
-        registerCollider(car, 0.3);
+        registerCollider(car, 0.3, true);  // Mark as climbable for zombies
         cars.push(car);
         propSpawnPoints.push({ position: car.position.clone(), radius: 2.2 });
     }
@@ -935,7 +1408,7 @@ function spawnZombie() {
     const hitboxMaterial = new THREE.MeshBasicMaterial({
         visible: false  // Invisible but still raycastable
     });
-    
+
     // Main body hitbox (capsule-like shape using cylinder + spheres)
     const bodyHitbox = new THREE.Mesh(
         new THREE.CylinderGeometry(0.5, 0.5, 1.8, 8),
@@ -944,7 +1417,7 @@ function spawnZombie() {
     bodyHitbox.position.y = 1.2;
     bodyHitbox.userData.isHitbox = true;
     zombie.add(bodyHitbox);
-    
+
     // Head hitbox
     const headHitbox = new THREE.Mesh(
         new THREE.SphereGeometry(0.4, 8, 8),
@@ -966,24 +1439,35 @@ function spawnZombie() {
             hitMeshes.push(child);
         }
     });
-    
+
     zombie.userData = {
         isZombieRoot: true,
         health: 1,
-        speed: 0.03 + gameState.wave * 0.01,
         damage: 20,
-        stopRange: 2.0,
+        stopRange: 1.0,
         minRange: 0,
         collisionRadius: 0.1,
         attackCooldown: 0,
-        maxForce: 0.018 + gameState.wave * 0.002,
-        verticalVelocity: 0,
-        isJumping: false,
-        jumpCooldownUntil: 0,
         hitMeshes,
         lastPosition: zombie.position.clone(),
-        lastMoveTime: performance.now()
+        lastMoveTime: performance.now(),
+        velocity: new THREE.Vector3()
     };
+
+    // Initialize the enhanced AI system
+    zombie.userData.ai = initZombieAI(zombie);
+
+    // Set speed and force based on AI type
+    const ai = zombie.userData.ai;
+    zombie.userData.speed = ai.baseSpeed;
+    zombie.userData.maxForce = ai.baseSpeed * 0.6;
+
+    // Brutes have more health
+    if (ai.type === ZombieType.BRUTE) {
+        zombie.userData.health = 3;
+        zombie.userData.damage = 35;
+    }
+
     if (zombieModel && zombieClips.length > 0) {
         const zombieInstance = zombie.children[0];
         const mixer = new THREE.AnimationMixer(zombieInstance);
@@ -1016,125 +1500,194 @@ function findZombieRoot(object) {
 function updateZombies(delta) {
     const now = performance.now();
     const frameScale = delta * 60;
-    zombies.forEach((zombie) => {
+
+    zombies.forEach((zombie, index) => {
         if (!zombie.userData) return;
 
         if (!zombie.userData.velocity) {
             zombie.userData.velocity = new THREE.Vector3();
         }
 
-        // Move towards player
+        // Update AI state machine
+        if (zombie.userData.ai) {
+            updateZombieState(zombie, delta, now);
+        }
+
+        // Calculate direction based on AI state
         const toPlayer = new THREE.Vector3();
         toPlayer.subVectors(player.position, zombie.position);
         toPlayer.y = 0;
         const horizontalDistance = Math.hypot(toPlayer.x, toPlayer.z);
         const toPlayerDirection = horizontalDistance > 0.0001 ? toPlayer.clone().normalize() : new THREE.Vector3();
-        const sightOrigin = zombie.position.clone().add(new THREE.Vector3(0, 1, 0));
-        const canSeePlayer = horizontalDistance > 0.1
-            && getClearDistance(sightOrigin, toPlayerDirection, horizontalDistance) >= horizontalDistance - 0.2;
-
-        updateZombieTactic(zombie, toPlayerDirection, horizontalDistance, canSeePlayer, now);
-        const targetPosition = getZombieTargetPosition(zombie, toPlayerDirection, horizontalDistance);
-        const direction = targetPosition.clone().sub(zombie.position);
-        direction.y = 0;
-        const targetDistance = Math.hypot(direction.x, direction.z);
-        if (targetDistance > 0.0001) {
-            direction.normalize();
-        }
+        const direction = getZombieMoveDirection(zombie);
 
         const stopRange = zombie.userData.stopRange ?? 1.0;
         const minRange = zombie.userData.minRange ?? 0;
-        const maxSpeed = zombie.userData.speed ?? 0.03;
-        const maxForce = zombie.userData.maxForce ?? maxSpeed * 0.6;
+        const baseSpeed = zombie.userData.speed ?? 0.03;
+
+        // Apply speed multiplier from AI state
+        const speedMultiplier = getZombieSpeedMultiplier(zombie);
+        const maxSpeed = baseSpeed * speedMultiplier;
+        const maxForce = zombie.userData.maxForce ?? baseSpeed * 0.6;
 
         let desiredVelocity = new THREE.Vector3();
-        if (horizontalDistance > stopRange || zombie.userData.tactic === 'strafe') {
+
+        // Different attack behavior based on AI state
+        const ai = zombie.userData.ai;
+        const isAttacking = ai ? ai.state === ZombieState.ATTACKING : horizontalDistance <= stopRange;
+
+        if (!isAttacking && direction.lengthSq() > 0.0001) {
             desiredVelocity = direction.clone().multiplyScalar(maxSpeed);
-        } else {
+        } else if (isAttacking) {
             // Attack player
-            if (zombie.userData.attackCooldown <= 0) {
-                takeDamage(zombie.userData.damage);
-                zombie.userData.attackCooldown = 60;
+            if (zombie.userData.attackCooldown <= 0 && horizontalDistance <= stopRange + 0.5) {
+                // Attack windup for more telegraphed attacks
+                if (ai) {
+                    ai.attackWindup = (ai.attackWindup || 0) + delta * 1000;
+                    if (ai.attackWindup >= 300) { // 300ms windup
+                        takeDamage(zombie.userData.damage);
+                        zombie.userData.attackCooldown = 60;
+                        ai.attackWindup = 0;
+                    }
+                } else {
+                    takeDamage(zombie.userData.damage);
+                    zombie.userData.attackCooldown = 60;
+                }
             }
             if (horizontalDistance < minRange) {
-                desiredVelocity = direction.clone().multiplyScalar(-maxSpeed * 0.5);
+                desiredVelocity = toPlayerDirection.clone().multiplyScalar(-maxSpeed * 0.3);
             }
         }
 
+        // Smooth arrival behavior
         const arrivalRadius = 3.5;
-        if (targetDistance < arrivalRadius && targetDistance > 0.2) {
-            const rampedSpeed = maxSpeed * (targetDistance / arrivalRadius);
-            desiredVelocity = direction.clone().multiplyScalar(rampedSpeed);
+        if (horizontalDistance < arrivalRadius && horizontalDistance > stopRange && !isAttacking) {
+            const rampedSpeed = maxSpeed * (horizontalDistance / arrivalRadius);
+            if (direction.lengthSq() > 0.0001) {
+                desiredVelocity = direction.clone().normalize().multiplyScalar(rampedSpeed);
+            }
         }
 
-        let steering = desiredVelocity.sub(zombie.userData.velocity).clampLength(0, maxForce);
+        let steering = desiredVelocity.clone().sub(zombie.userData.velocity).clampLength(0, maxForce);
 
+        // Obstacle avoidance (only for non-climbable objects like buildings and lampposts)
         const origin = zombie.position.clone().add(new THREE.Vector3(0, 1, 0));
         const lookAhead = 3 + maxSpeed * 25;
-        const pathBlocked = targetDistance > 0.1
-            && getClearDistance(origin, direction, targetDistance) < targetDistance - 0.1;
-        if (pathBlocked) {
-            const left = new THREE.Vector3(-direction.z, 0, direction.x).normalize();
-            const right = new THREE.Vector3(direction.z, 0, -direction.x).normalize();
-            const sideProbeDistance = Math.max(2.5, lookAhead * 0.6);
-            const leftClear = getClearDistance(origin, left, sideProbeDistance);
-            const rightClear = getClearDistance(origin, right, sideProbeDistance);
-            if (!zombie.userData.avoidSide || Math.abs(leftClear - rightClear) > 0.2) {
-                zombie.userData.avoidSide = leftClear >= rightClear ? -1 : 1;
+
+        // Only do obstacle avoidance if actively moving
+        if (direction.lengthSq() > 0.0001) {
+            const moveDir = direction.clone().normalize();
+            const pathBlocked = getZombieClearDistance(origin, moveDir, lookAhead) < lookAhead * 0.7;
+
+            if (pathBlocked) {
+                const left = new THREE.Vector3(-moveDir.z, 0, moveDir.x).normalize();
+                const right = new THREE.Vector3(moveDir.z, 0, -moveDir.x).normalize();
+                const sideProbeDistance = Math.max(2.5, lookAhead * 0.6);
+                const leftClear = getZombieClearDistance(origin, left, sideProbeDistance);
+                const rightClear = getZombieClearDistance(origin, right, sideProbeDistance);
+
+                if (!zombie.userData.avoidSide || Math.abs(leftClear - rightClear) > 0.2) {
+                    zombie.userData.avoidSide = leftClear >= rightClear ? -1 : 1;
+                }
+                const avoidDirection = zombie.userData.avoidSide === -1 ? left : right;
+                const avoidDesired = avoidDirection.multiplyScalar(maxSpeed);
+                steering = avoidDesired.sub(zombie.userData.velocity).clampLength(0, maxForce * 1.4);
+            } else {
+                zombie.userData.avoidSide = null;
             }
-            const avoidDirection = zombie.userData.avoidSide === -1 ? left : right;
-            const avoidDesired = avoidDirection.multiplyScalar(maxSpeed);
-            steering = avoidDesired.sub(zombie.userData.velocity).clampLength(0, maxForce * 1.4);
-            tryZombieHop(zombie, direction, now);
-        } else {
-            zombie.userData.avoidSide = null;
         }
 
-        if (!zombie.userData.stuckAvoidUntil) {
-            zombie.userData.stuckAvoidUntil = 0;
-        }
-        if (zombie.userData.stuckAvoidUntil <= now) {
-            zombie.userData.stuckAvoidDirection = null;
-        }
-
+        // Separation from other zombies (enhanced for pack behavior)
         const separation = new THREE.Vector3();
-        const separationRadius = (zombie.userData.collisionRadius ?? 0.7) * 2.2;
+        const separationRadius = (zombie.userData.collisionRadius ?? 0.7) * 2.5;
+        const alignment = new THREE.Vector3();
+        let neighborCount = 0;
+
         zombies.forEach((other) => {
             if (other === zombie) return;
             const offset = zombie.position.clone().sub(other.position);
             offset.y = 0;
             const distance = offset.length();
+
             if (distance > 0.0001 && distance < separationRadius) {
+                // Separation force
                 separation.add(offset.normalize().multiplyScalar((separationRadius - distance) / separationRadius));
             }
+
+            // Alignment for pack behavior (only for pursuing zombies)
+            if (distance < 6 && ai && ai.state === ZombieState.PURSUING && other.userData?.ai?.state === ZombieState.PURSUING) {
+                if (other.userData.velocity) {
+                    alignment.add(other.userData.velocity);
+                    neighborCount++;
+                }
+            }
         });
+
         if (separation.lengthSq() > 0.0001) {
             const separationDesired = separation.normalize().multiplyScalar(maxSpeed);
             const separationSteering = separationDesired.sub(zombie.userData.velocity).clampLength(0, maxForce * 0.9);
             steering.add(separationSteering);
         }
 
+        // Apply slight alignment for horde feel
+        if (neighborCount > 0 && ai && ai.type !== ZombieType.STALKER) {
+            alignment.divideScalar(neighborCount);
+            const alignmentSteering = alignment.clone().sub(zombie.userData.velocity).clampLength(0, maxForce * 0.2);
+            steering.add(alignmentSteering);
+        }
+
+        // Apply steering
         zombie.userData.velocity.add(steering.multiplyScalar(frameScale));
         if (zombie.userData.velocity.length() > maxSpeed) {
             zombie.userData.velocity.setLength(maxSpeed);
         }
 
+        // Move with collisions (zombies can walk over debris)
         const moveDelta = zombie.userData.velocity.clone().multiplyScalar(frameScale);
         const previousPosition = zombie.position.clone();
-        moveWithCollisions(zombie.position, moveDelta, zombie.userData.collisionRadius ?? 0.7);
+        moveZombieWithCollisions(zombie.position, moveDelta, zombie.userData.collisionRadius ?? 0.7);
+
+        // Adjust zombie height for climbing over debris and cars
+        const climbHeight = getClimbableHeightAt(zombie.position, zombie.userData.collisionRadius ?? 0.7);
+        const targetY = climbHeight;
+        const currentY = zombie.position.y;
+
+        // Smoothly interpolate Y position for climbing/descending
+        if (Math.abs(targetY - currentY) > 0.01) {
+            const climbSpeed = 0.15;  // How fast zombies climb
+            if (targetY > currentY) {
+                zombie.position.y = Math.min(targetY, currentY + climbSpeed);
+            } else {
+                zombie.position.y = Math.max(targetY, currentY - climbSpeed * 0.5);  // Descend slower
+            }
+        } else {
+            zombie.position.y = targetY;
+        }
+
         if (zombie.position.distanceToSquared(previousPosition) < 0.000001) {
             zombie.userData.velocity.set(0, 0, 0);
         }
 
-        updateZombieVerticalMotion(zombie, frameScale);
-
-        // Face player
-        zombie.lookAt(player.position.x, zombie.position.y, player.position.z);
+        // Face direction of movement or player
+        if (ai && (ai.state === ZombieState.IDLE || ai.state === ZombieState.ALERTED)) {
+            // Idle/alert: slowly turn towards movement or interest
+            if (ai.wanderTarget && ai.state === ZombieState.IDLE) {
+                const targetLook = ai.wanderTarget.clone();
+                targetLook.y = zombie.position.y;
+                zombie.lookAt(targetLook);
+            } else if (ai.lastKnownPlayerPos) {
+                zombie.lookAt(ai.lastKnownPlayerPos.x, zombie.position.y, ai.lastKnownPlayerPos.z);
+            }
+        } else {
+            // Active states: face player
+            zombie.lookAt(player.position.x, zombie.position.y, player.position.z);
+        }
 
         if (zombie.userData.attackCooldown > 0) {
             zombie.userData.attackCooldown--;
         }
 
+        // Teleport stuck zombies after timeout
         if (!zombie.userData.lastPosition) {
             zombie.userData.lastPosition = zombie.position.clone();
             zombie.userData.lastMoveTime = now;
@@ -1143,12 +1696,17 @@ function updateZombies(delta) {
             if (movementDistance > 0.05) {
                 zombie.userData.lastPosition.copy(zombie.position);
                 zombie.userData.lastMoveTime = now;
-            } else if (now - zombie.userData.lastMoveTime > 7000) {
+            } else if (now - zombie.userData.lastMoveTime > 10000) {
+                // Respawn stuck zombie
                 zombie.position.copy(getZombieSpawnPosition(0.5));
                 zombie.userData.lastPosition.copy(zombie.position);
                 zombie.userData.lastMoveTime = now;
                 zombie.userData.attackCooldown = 0;
                 zombie.userData.velocity.set(0, 0, 0);
+                if (ai) {
+                    ai.state = ZombieState.IDLE;
+                    ai.lastKnownPlayerPos = null;
+                }
             }
         }
     });
@@ -1198,9 +1756,14 @@ function shoot() {
             // Check for headshot bonus
             const isHeadshot = hitObject.userData.isHeadshot;
             const damage = isHeadshot ? 50 : 25;  // Double damage for headshots
-            
+
             zombie.userData.health -= damage;
             showHitMarker();
+
+            // Apply stun effect (longer for headshots)
+            if (zombie.userData.health > 0) {
+                stunZombie(zombie, isHeadshot ? 500 : 200);
+            }
 
             // Blood effect at hit point
             createBloodEffect(nearestZombieHit.point);
@@ -1210,6 +1773,21 @@ function shoot() {
             }
         }
     }
+
+    // Alert nearby zombies to the gunshot sound
+    const gunshotAlertRange = 30;
+    zombies.forEach((zombie) => {
+        if (!zombie.userData?.ai) return;
+        const ai = zombie.userData.ai;
+        const distance = zombie.position.distanceTo(player.position);
+
+        if (distance < gunshotAlertRange && ai.state === ZombieState.IDLE) {
+            ai.state = ZombieState.ALERTED;
+            ai.stateTimer = 300 + Math.random() * 400;
+            ai.lastKnownPlayerPos = player.position.clone();
+            ai.lastSeenTime = performance.now();
+        }
+    });
 
     // Create bullet tracer
     createBulletTracer(raycaster);
