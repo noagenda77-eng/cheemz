@@ -456,6 +456,42 @@ function getClearDistance(origin, direction, range = 5) {
     return hits.length > 0 ? hits[0].distance : range;
 }
 
+function updateZombieVerticalMotion(zombie, frameScale) {
+    if (zombie.userData.verticalVelocity === undefined) {
+        zombie.userData.verticalVelocity = 0;
+    }
+    const gravity = 0.015;
+    zombie.userData.verticalVelocity -= gravity * frameScale;
+    zombie.position.y += zombie.userData.verticalVelocity * frameScale;
+
+    if (zombie.position.y <= 0) {
+        zombie.position.y = 0;
+        zombie.userData.verticalVelocity = 0;
+        zombie.userData.isJumping = false;
+    }
+}
+
+function tryZombieHop(zombie, direction, now) {
+    const jumpCooldownUntil = zombie.userData.jumpCooldownUntil ?? 0;
+    if (now < jumpCooldownUntil || zombie.userData.isJumping) {
+        return false;
+    }
+
+    const lowOrigin = zombie.position.clone().add(new THREE.Vector3(0, 0.5, 0));
+    const highOrigin = zombie.position.clone().add(new THREE.Vector3(0, 1.6, 0));
+    const hopCheckDistance = 1.6;
+    const lowBlocked = getClearDistance(lowOrigin, direction, hopCheckDistance) < hopCheckDistance - 0.1;
+    const highClear = getClearDistance(highOrigin, direction, hopCheckDistance) >= hopCheckDistance - 0.1;
+
+    if (lowBlocked && highClear) {
+        zombie.userData.isJumping = true;
+        zombie.userData.verticalVelocity = 0.18;
+        zombie.userData.jumpCooldownUntil = now + 1400;
+        return true;
+    }
+    return false;
+}
+
 function updateZombieTactic(zombie, toPlayerDirection, horizontalDistance, canSeePlayer, now) {
     const refreshTime = zombie.userData.nextTacticTime ?? 0;
     if (now < refreshTime && zombie.userData.tactic) {
@@ -972,11 +1008,14 @@ function spawnZombie() {
         health: 1,
         speed: 0.03 + gameState.wave * 0.01,
         damage: 20,
-        stopRange: 1.0,
+        stopRange: 2.0,
         minRange: 0,
         collisionRadius: 0.1,
         attackCooldown: 0,
         maxForce: 0.018 + gameState.wave * 0.002,
+        verticalVelocity: 0,
+        isJumping: false,
+        jumpCooldownUntil: 0,
         hitMeshes,
         lastPosition: zombie.position.clone(),
         lastMoveTime: performance.now()
@@ -1082,6 +1121,7 @@ function updateZombies(delta) {
             const avoidDirection = zombie.userData.avoidSide === -1 ? left : right;
             const avoidDesired = avoidDirection.multiplyScalar(maxSpeed);
             steering = avoidDesired.sub(zombie.userData.velocity).clampLength(0, maxForce * 1.4);
+            tryZombieHop(zombie, direction, now);
         } else {
             zombie.userData.avoidSide = null;
         }
@@ -1121,6 +1161,8 @@ function updateZombies(delta) {
         if (zombie.position.distanceToSquared(previousPosition) < 0.000001) {
             zombie.userData.velocity.set(0, 0, 0);
         }
+
+        updateZombieVerticalMotion(zombie, frameScale);
 
         // Face player
         zombie.lookAt(player.position.x, zombie.position.y, player.position.z);
