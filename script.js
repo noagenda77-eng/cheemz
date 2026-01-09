@@ -78,18 +78,18 @@ const animationClock = new THREE.Clock();
 const collisionBox = new THREE.Box3();
 const navigationRaycaster = new THREE.Raycaster();
 
-const ZOMBIE_MODEL_URL = 'assets/zombie.glb';
-const ZOMBIE_ATTACK_MODEL_URL = 'assets/zombie_attack.glb';
-const ZOMBIE_CRAWL_MODEL_URL = 'assets/zombie_crawl.glb';
+const ZOMBIE_MODEL_URL = '/zombie/assets/zombie.glb';
+const ZOMBIE_ATTACK_MODEL_URL = '/zombie/assets/zombie_attack.glb';
+const ZOMBIE_CRAWL_MODEL_URL = '/zombie/assets/zombie_crawl.glb';
 const ZOMBIE_SCALE = 1.2;
-const CAR_MODEL_URL = 'assets/car.glb';
+const CAR_MODEL_URL = '/zombie/assets/car.glb';
 const CAR_SCALE = 3;
 const CAR_GROUND_OFFSET = 0.05;
 const PLAYER_SPAWN_RADIUS = 3;
-const DEBRIS_MODEL_URL = 'assets/debris.glb';
+const DEBRIS_MODEL_URL = '/zombie/assets/debris.glb';
 const DEBRIS_SCALE = 2;
-const DECAL_TEXTURE_URL = 'assets/decal.png';
-const GROUND_TEXTURE_URL = 'assets/ground.png';
+const DECAL_TEXTURE_URL = '/zombie/assets/decal.png';
+const GROUND_TEXTURE_URL = '/zombie/assets/ground.png';
 
 // Initialize Three.js
 function init() {
@@ -355,11 +355,11 @@ function setupGunModel() {
 }
 
 function setupAudio() {
-    gunshotAudio = new Audio('assets/gunshot.mp3');
+    gunshotAudio = new Audio('/zombie/assets/gunshot.mp3');
     gunshotAudio.volume = 0.5;
-    waveAudio = new Audio('assets/wave.mp3');
+    waveAudio = new Audio('/zombie/assets/wave.mp3');
     waveAudio.volume = 0.6;
-    hurtAudio = new Audio('assets/hurt.mp3');
+    hurtAudio = new Audio('/zombie/assets/hurt.mp3');
     hurtAudio.volume = 0.55;
 }
 
